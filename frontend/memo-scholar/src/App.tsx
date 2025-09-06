@@ -226,10 +226,16 @@ export default function App() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Panel kind="youtube" accent="muted" />
-          <Panel kind="paper" accent="muted" />
-          <Panel kind="model" accent="muted" />
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <Panel kind="youtube" accent="muted" />
+          </div>
+          <div className="flex-1">
+            <Panel kind="paper" accent="muted" />
+          </div>
+          <div className="flex-1">
+            <Panel kind="model" accent="muted" />
+          </div>
         </div>
       </main>
 
