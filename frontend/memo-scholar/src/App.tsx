@@ -127,10 +127,10 @@ function Panel({ kind, accent }: { kind: "youtube" | "paper" | "model"; accent: 
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "reject")} aria-label="Reject">
+                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "reject")} aria-label="Reject" className="text-red-500 hover:text-red-700">
                   <X className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "accept")} aria-label="Accept">
+                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "accept")} aria-label="Accept" className="text-green-500 hover:text-green-700">
                   <Check className="h-4 w-4" />
                 </Button>
               </div>
@@ -172,9 +172,9 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${isDark ? "dark bg-gray-900 text-white" : "bg-background text-foreground"}`}>
+    <div className={`min-h-screen flex flex-col ${isDark ? "dark bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur border-b">
+      <header className={`sticky top-0 z-20 backdrop-blur border-b ${isDark ? "bg-gray-900/80" : "bg-white/80"}`}>
         <div className="mx-auto max-w-6xl px-4 py-4">
           <div className="grid grid-cols-3 items-center">
             <div />
@@ -202,7 +202,7 @@ export default function App() {
       </header>
 
       {/* Main content */}
-      <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+      <main className="flex-1 mx-auto max-w-6xl px-4 py-6 space-y-6 w-full">
         <Card className="shadow-sm">
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-lg">Project Details</CardTitle>
@@ -226,7 +226,7 @@ export default function App() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col min-[600px]:flex-row gap-4">
           <div className="flex-1">
             <Panel kind="youtube" accent="muted" />
           </div>
