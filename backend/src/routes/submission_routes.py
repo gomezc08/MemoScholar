@@ -26,7 +26,7 @@ def generate_submission():
                     'success': False
                 }), 400
     
-        # placeholder.
+        # TODO: call our function (should be where we call all panel AI functions).
         return jsonify({
             'success': True,
             'data': data
@@ -37,8 +37,8 @@ def generate_submission():
             'success': False
         }), 500
 
-@app.route(GENERATE_SUBMISSION + "panel/", methods=['POST'])
-def generate_submission_panel():
+@app.route(GENERATE_SUBMISSION + "individual_panel/", methods=['POST'])
+def generate_submission_individual_panel():
     """
     Generate panel-specific submission content.
     """
@@ -54,7 +54,7 @@ def generate_submission_panel():
                     'success': False
                 }), 400
         
-        # placeholder.
+        # TODO: call our function (should be where we call all specific panel AI function).
         return jsonify({
             'success': True,
             'data': data
