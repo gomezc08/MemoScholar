@@ -12,12 +12,13 @@ Perform the following in the project root directory...
 
 ### Frontend
 - Download Node.js here: https://nodejs.org/en (node -v >= 22.19.0, npm -v >= 11.6.0)
+- `cd frontend/memo-scholar`
+- `npm install`
 
 
-## Install & Run (Frontend)
-`cd frontend/memo-scholar`
-`npm install`
-`npm run dev`
+## Running server(s)
+- **Frontend:** `cd frontend/memo-scholar`, then `npm run dev`
+- **Backend:** `python .\backend\run_server.py`
 
 Open the printed local URL in your browser.
 
