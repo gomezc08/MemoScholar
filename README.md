@@ -4,9 +4,15 @@ Allow users to gather resources for their research and studies.
 See full techspec here: https://docs.google.com/document/d/1EDiuOM7pzMlwyO4g-ZQU2VtMs2yAtt-3llWDrcgQpJQ/edit?usp=sharing
 
 ## Prerequisites
-Download Node.js here: https://nodejs.org/en
-- node -v >= 22.19.0
-- npm -v >= 11.6.0
+
+### Backend
+Perform the following in the project root directory...
+- `python -m venv venv_memo`
+- After activating virtual environment, run `pip install -r .\requirements.txt`
+
+### Frontend
+- Download Node.js here: https://nodejs.org/en (node -v >= 22.19.0, npm -v >= 11.6.0)
+
 
 ## Install & Run (Frontend)
 `cd frontend/memo-scholar`
