@@ -5,7 +5,7 @@ import os
 # Add the parent directory to the path to import from openai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from constants import GENERATE_SUBMISSION
+from ..config.constants import GENERATE_SUBMISSION
 
 submission_bp = Blueprint('submission', __name__)
 

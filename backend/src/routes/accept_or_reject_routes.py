@@ -5,7 +5,7 @@ import os
 # Add the parent directory to the path to import from openai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from constants import ACCEPT_OR_REJECT
+from ..config.constants import ACCEPT_OR_REJECT
 
 accept_or_reject_bp = Blueprint('accept_or_reject', __name__)
 
