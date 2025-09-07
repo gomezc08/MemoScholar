@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Check, X, Play, RotateCcw, Download, Youtube, FileText, Cpu, Sun, Moon, Save } from "lucide-react";
+import { Check, X, RotateCcw, Download, Youtube, FileText, Cpu, Sun, Moon, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -83,9 +83,6 @@ function Panel({ kind, accent }: { kind: "youtube" | "paper" | "model"; accent: 
             <Button size="sm" variant="outline" onClick={regenerate}>
               <RotateCcw className="h-4 w-4 mr-1" /> Regenerate
             </Button>
-            <Button size="sm">
-              <Play className="h-4 w-4 mr-1" /> Run
-            </Button>
           </div>
         </div>
       </CardHeader>
@@ -157,7 +154,7 @@ export default function App() {
     window.print();
   };
 
-  const onSaveProject = async () => {
+  const onRun = async () => {
     const payload = { topic, objective, constraints };
     try {
       await fetch("/api/project/save", {
@@ -189,13 +186,7 @@ export default function App() {
               >
                 {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
-              <Button
-                size="sm"
-                className="bg-black text-white hover:bg-black/90"
-                onClick={onSaveProject}
-              >
-                <Save className="h-4 w-4 mr-2" /> Save Project
-              </Button>
+              
             </div>
           </div>
         </div>
@@ -206,8 +197,8 @@ export default function App() {
         <Card className="shadow-sm">
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-lg">Project Details</CardTitle>
-            <Button onClick={onSaveProject} variant="default">
-              <Save className="h-4 w-4 mr-1" /> Save Project
+            <Button onClick={onRun} variant="default">
+              <Save className="h-4 w-4 mr-1" /> Run
             </Button>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
