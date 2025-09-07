@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Blueprint, request, jsonify
 import sys
 import os
 
@@ -7,9 +7,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from constants import ACCEPT_OR_REJECT
 
-app = Flask(__name__)
+accept_or_reject_bp = Blueprint('accept_or_reject', __name__)
 
-@app.route(ACCEPT_OR_REJECT, methods=['POST'])
+@accept_or_reject_bp.route(ACCEPT_OR_REJECT, methods=['POST'])
 def accept_or_reject():
     """
     Provides ability to recognize whether the submission is accepted or rejected.
@@ -37,6 +37,3 @@ def accept_or_reject():
             'error': str(e),
             'success': False
         }), 500
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)

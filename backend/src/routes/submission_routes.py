@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Blueprint, request, jsonify
 import sys
 import os
 
@@ -7,9 +7,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from constants import GENERATE_SUBMISSION
 
-app = Flask(__name__)
+submission_bp = Blueprint('submission', __name__)
 
-@app.route(GENERATE_SUBMISSION, methods=['POST'])
+@submission_bp.route(GENERATE_SUBMISSION, methods=['POST'])
 def generate_submission():
     """
     Generate submission content based on topic, objective, and guidelines.
@@ -37,7 +37,7 @@ def generate_submission():
             'success': False
         }), 500
 
-@app.route(GENERATE_SUBMISSION + "individual_panel/", methods=['POST'])
+@submission_bp.route(GENERATE_SUBMISSION + "individual_panel/", methods=['POST'])
 def generate_submission_individual_panel():
     """
     Generate panel-specific submission content.
@@ -64,7 +64,3 @@ def generate_submission_individual_panel():
             'error': str(e),
             'success': False
         }), 500
-
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
