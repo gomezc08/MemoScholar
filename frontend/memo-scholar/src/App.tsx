@@ -172,7 +172,7 @@ export default function App() {
     <div className={`min-h-screen flex flex-col ${isDark ? "dark bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
       {/* Header */}
       <header className={`sticky top-0 z-20 backdrop-blur border-b ${isDark ? "bg-gray-900/80" : "bg-white/80"}`}>
-        <div className="mx-auto max-w-6xl px-4 py-4">
+        <div className="w-full px-4 py-4">
           <div className="grid grid-cols-3 items-center">
             <div />
             <h1 className="text-center text-2xl sm:text-3xl font-semibold tracking-tight">MemoScholar</h1>
@@ -193,7 +193,7 @@ export default function App() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 mx-auto max-w-6xl px-4 py-6 space-y-6 w-full">
+      <main className="flex-1 w-full px-4 py-6 space-y-6">
         <Card className="shadow-sm">
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-lg">Project Details</CardTitle>
