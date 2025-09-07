@@ -7,10 +7,10 @@ export function HeaderBar({ isDark, onToggle }: { isDark: boolean; onToggle: () 
       <div className="w-full px-4 py-4">
         <div className="grid grid-cols-3 items-center">
           <div />
-          <h1 className="text-center text-2xl sm:text-3xl font-semibold tracking-tight">MemoScholar</h1>
+          <h1 className="text-center text-3xl sm:text-4xl font-semibold tracking-tight">MemoScholar</h1>
           <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={onToggle}>
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <Button variant="ghost" size="icon" className="h-12 w-12" aria-label="Toggle theme" onClick={onToggle}>
+              {isDark ? <Sun className="h-10 w-10" /> : <Moon className="h-10 w-10" />}
             </Button>
           </div>
         </div>

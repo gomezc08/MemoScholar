@@ -82,11 +82,11 @@ export function Panel({ kind, accent = "muted" }: { kind: PanelKind; accent?: st
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "reject")} aria-label="Reject" className="text-red-500 hover:text-red-700">
-                  <X className="h-4 w-4" />
+                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:text-red-700">
+                  <X className="h-10 w-10" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "accept")} aria-label="Accept" className="text-green-500 hover:text-green-700">
-                  <Check className="h-4 w-4" />
+                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:text-green-700">
+                  <Check className="h-10 w-10" />
                 </Button>
               </div>
             </motion.div>
