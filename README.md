@@ -4,27 +4,27 @@ Allow users to gather resources for their research and studies.
 See full techspec here: https://docs.google.com/document/d/1EDiuOM7pzMlwyO4g-ZQU2VtMs2yAtt-3llWDrcgQpJQ/edit?usp=sharing
 
 ## Prerequisites
+- **Node.js**: Download here: https://nodejs.org/en (node -v >= 22.19.0, npm -v >= 11.6.0)
+- **Python**: Python 3.8+ with pip
 
-### Backend
-Perform the following in the project root directory...
-- `python -m venv venv_memo`
-- After activating virtual environment, run `pip install -r .\requirements.txt`
+## Quick Start
 
-### Frontend
-- Download Node.js here: https://nodejs.org/en (node -v >= 22.19.0, npm -v >= 11.6.0)
-- `cd frontend/memo-scholar`
-- `npm install`
+1. **Clone and install all dependencies:**
+   ```bash
+   git clone <your-repo>
+   cd MemoScholar
+   npm run install:all
+   ```
 
+2. **Run both frontend and backend:**
+   ```bash
+   npm run dev
+   ```
 
-## Running server(s)
-- **Frontend:** `cd frontend/memo-scholar`, then `npm run dev`
-- **Backend:** `python .\backend\run_server.py`
+3. **Open your browser:**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:5000
 
-Open the printed local URL in your browser.
-
-## Build & Preview
-`npm run build`
-`npm run preview`
 
 ## Notes
 - The app uses Tailwind CSS and shadcn/ui. All CSS tooling is already configured in this repo (Tailwind, PostCSS, Autoprefixer). After a fresh clone, only `npm install` is required.
