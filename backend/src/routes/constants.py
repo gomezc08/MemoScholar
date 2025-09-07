@@ -1,0 +1,1 @@
+GENERATE_SUBMISSION = "/generate_submission/"
