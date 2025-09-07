@@ -1,0 +1,19 @@
+{
+    "name": "memo-scholar-fullstack",
+    "version": "1.0.0",
+    "scripts": {
+        "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+        "dev:frontend": "cd frontend/memo-scholar && npm run dev",
+        "dev:backend": "python backend/run_server.py",
+        "install:all": "npm run install:frontend && npm run install:backend",
+        "install:frontend": "cd frontend/memo-scholar && npm install",
+        "install:backend": "pip install -r requirements.txt",
+        "activate:venv": "venv_memo\\Scripts\\activate",
+        "dev:with-venv": "venv_memo\\Scripts\\activate && npm run dev",
+        "build": "cd frontend/memo-scholar && npm run build",
+        "preview": "cd frontend/memo-scholar && npm run preview"
+    },
+    "devDependencies": {
+      "concurrently": "^8.2.2"
+    }
+  }
