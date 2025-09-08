@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { mockItems } from "@/lib/mock";
-import { postFeedback } from "@/lib/api";
 import type { Item, PanelKind } from "@/types";
+import { acceptOrReject } from "@/lib/api";
+import { generateSubmissionIndividualPanel } from "@/lib/api";
 
-export function Panel({ kind, accent = "muted" }: { kind: PanelKind; accent?: string }) {
+
+export function Panel({ kind, accent = "muted", topic = "", objective = "", guidelines = "" }: { kind: PanelKind; accent?: string; topic?: string; objective?: string; guidelines?: string }) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => mockItems(kind));
 
@@ -21,19 +23,34 @@ export function Panel({ kind, accent = "muted" }: { kind: PanelKind; accent?: st
 
   const label = kind === "youtube" ? "YouTube" : kind === "paper" ? "Papers" : "Models";
 
-  function regenerate() {
-    setItems(prev => [...prev].sort(() => Math.random() - 0.5));
+  const regenerate = async () => {
+    try{
+      console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
+      const result = await generateSubmissionIndividualPanel({ panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
+      console.log("Submission generated:", result); 
+    } 
+    catch (e) {
+      console.error("Error generating submission:", e); 
+    }
   }
 
-  async function handleFeedback(id: string, label: "accept" | "reject") {
+  const acceptOrRejectPanelItem = async (id: string, label: "accept" | "reject") => {
+    // Update UI state immediately for visual feedback
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
-    try {
-      await postFeedback({ id, kind, label });
-      console.log(`${label === "accept" ? "accepted" : "rejected"} ${id}`);
-    } catch (err) {
-      console.error(err);
+    
+    try{
+      console.log("Calling acceptOrReject API on the following data:", { panel_name: label, panel_name_content_id: id });
+      const result = await acceptOrReject({ panel_name: label, panel_name_content_id: id });
+      console.log("Submission accepted or rejected:", result); 
+      
+      // Remove item after successful API call with delay for dissolve effect
+      setTimeout(() => setItems(prev => prev.filter(it => it.id !== id)), 800);
+    } 
+    catch (e) {
+      console.error("Error accepting or rejecting:", e);
+      // Revert the feedback state on error
+      setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: undefined } : it));
     }
-    setTimeout(() => setItems(prev => prev.filter(it => it.id !== id)), 800);
   }
 
   return (
@@ -82,10 +99,10 @@ export function Panel({ kind, accent = "muted" }: { kind: PanelKind; accent?: st
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:text-red-700">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:text-red-700">
                   <X className="h-10 w-10" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => handleFeedback(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:text-green-700">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:text-green-700">
                   <Check className="h-10 w-10" />
                 </Button>
               </div>

@@ -7,18 +7,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
 import { useTheme } from "@/hooks/useTheme";
-import { saveProject } from "@/lib/api";
+import { generateSubmission } from "@/lib/api";
 
 export default function App() {
   const [topic, setTopic] = useState("");
   const [objective, setObjective] = useState("");
-  const [constraints, setConstraints] = useState("");
+  const [guidelines, setGuidelines] = useState("");
   const { isDark, toggle } = useTheme();
 
   const onSavePDF = () => window.print();
   const onRun = async () => {
-    try { await saveProject({ topic, objective, constraints }); console.log("Project saved"); }
-    catch (e) { console.error(e); }
+    console.log("Run button clicked!"); // Debug log
+    console.log("Payload:", { topic, objective, guidelines }); // Debug log
+    try { 
+      console.log("Calling generateSubmission API...");
+      const result = await generateSubmission({ topic, objective, guidelines }); 
+      console.log("Submission generated:", result); 
+    }
+    catch (e) { 
+      console.error("Error generating submission:", e); 
+    }
   };
 
   return (
@@ -43,16 +51,16 @@ export default function App() {
               <Input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="e.g., build a GNN-based re-ranker" />
             </div>
             <div className="sm:col-span-2 space-y-2">
-              <label className="text-sm font-medium">Constraints / Notes</label>
-              <Textarea value={constraints} onChange={(e) => setConstraints(e.target.value)} placeholder="e.g., prefer 2024–2025 content; no videos > 20 min; CVPR/NeurIPS venues; Apache-2.0 models" />
+              <label className="text-sm font-medium">Guidelines</label>
+              <Textarea value={guidelines} onChange={(e) => setGuidelines(e.target.value)} placeholder="e.g., submission guidelines, formatting requirements, specific instructions" />
             </div>
           </CardContent>
         </Card>
 
         <div className="flex flex-col min-[600px]:flex-row gap-4">
-          <div className="flex-1"><Panel kind="youtube" accent="muted" /></div>
-          <div className="flex-1"><Panel kind="paper" accent="muted" /></div>
-          <div className="flex-1"><Panel kind="model" accent="muted" /></div>
+          <div className="flex-1"><Panel kind="youtube" accent="muted" topic={topic} objective={objective} guidelines={guidelines} /></div>
+          <div className="flex-1"><Panel kind="paper" accent="muted" topic={topic} objective={objective} guidelines={guidelines} /></div>
+          <div className="flex-1"><Panel kind="model" accent="muted" topic={topic} objective={objective} guidelines={guidelines} /></div>
         </div>
       </main>
 
