@@ -1,18 +1,30 @@
-export async function postFeedback(payload: { id: string; kind: string; label: "accept" | "reject" }) {
-    const res = await fetch("/api/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Feedback failed");
-  }
-  
-  export async function saveProject(payload: { topic: string; objective: string; constraints: string }) {
-    const res = await fetch("/api/project/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Save failed");
-  }
-  
+export async function generateSubmission(payload: { topic: string; objective: string; guidelines: string }) {
+  const res = await fetch("/api/generate_submission/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Generate submission main panel failed");
+  return res.json();
+}
+
+export async function generateSubmissionIndividualPanel(payload: { topic: string; objective: string; guidelines: string; user_special_instructions: string; panel_name: string }) {
+  const res = await fetch("/api/generate_submission/individual_panel/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Generate submission individual panel failed");
+  return res.json();
+}
+
+export async function acceptOrReject(payload: { panel_name: string; panel_name_content_id: string }) {
+  const res = await fetch("/api/accept_or_reject/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Accept or reject failed");
+  return res.json();
+}
+
