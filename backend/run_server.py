@@ -30,7 +30,7 @@ def create_app():
         """Root endpoint with API information."""
         return jsonify({
             'message': 'MemoScholar API Server',
-            'version': '1.0',
+            'version': '1.0.0',
             'endpoints': {
                 'submission': {
                     'POST /generate_submission/': 'Generate submission content',
