@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { Check, X, RotateCcw, Youtube, FileText, Cpu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { mockItems } from "@/lib/mock";
@@ -11,8 +10,21 @@ import type { Item, PanelKind } from "@/types";
 import { acceptOrReject } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
 
-
-export function Panel({ kind, accent = "muted", topic = "", objective = "", guidelines = "" }: { kind: PanelKind; accent?: string; topic?: string; objective?: string; guidelines?: string }) {
+export function Panel({ 
+  kind, 
+  accent = "muted", 
+  topic = "", 
+  objective = "", 
+  guidelines = "",
+  onItemFeedback
+}: { 
+  kind: PanelKind; 
+  accent?: string; 
+  topic?: string; 
+  objective?: string; 
+  guidelines?: string;
+  onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
+}) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => mockItems(kind));
 
@@ -35,8 +47,16 @@ export function Panel({ kind, accent = "muted", topic = "", objective = "", guid
   }
 
   const acceptOrRejectPanelItem = async (id: string, label: "accept" | "reject") => {
+    const item = items.find(it => it.id === id);
+    if (!item) return;
+
     // Update UI state immediately for visual feedback
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
+    
+    // Call the parent callback to manage liked/disliked items
+    if (onItemFeedback) {
+      onItemFeedback(item, label);
+    }
     
     try{
       console.log("Calling acceptOrReject API on the following data:", { panel_name: label, panel_name_content_id: id });
@@ -60,7 +80,6 @@ export function Panel({ kind, accent = "muted", topic = "", objective = "", guid
           <CardTitle className="flex items-center gap-2 text-lg">
             {icon}
             {label}
-            <Badge variant="secondary" className="ml-2">Panel</Badge>
           </CardTitle>
           <Button size="sm" variant="outline" onClick={regenerate}>
             <RotateCcw className="h-4 w-4 mr-1" /> Regenerate
