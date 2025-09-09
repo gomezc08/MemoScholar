@@ -6,13 +6,32 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
+import { ManagementPanel } from "@/components/ui/management_panel";
 import { useTheme } from "@/hooks/useTheme";
 import { generateSubmission } from "@/lib/api";
+import type { Item } from "@/types";
 
 export default function App() {
   const [topic, setTopic] = useState("");
   const [objective, setObjective] = useState("");
   const [guidelines, setGuidelines] = useState("");
+  const [isManagementOpen, setIsManagementOpen] = useState(false);
+  const [likedItems, setLikedItems] = useState<Item[]>([
+    {
+      id: "demo-liked-1",
+      title: "Introduction to Graph Neural Networks",
+      meta: { channel: "AI Explained", duration: "15:30" },
+      feedback: "accept"
+    }
+  ]);
+  const [dislikedItems, setDislikedItems] = useState<Item[]>([
+    {
+      id: "demo-disliked-1", 
+      title: "Outdated Machine Learning Tutorial",
+      meta: { channel: "OldTech", duration: "8:45" },
+      feedback: "reject"
+    }
+  ]);
   const { isDark, toggle } = useTheme();
 
   const onSavePDF = () => window.print();
@@ -29,9 +48,43 @@ export default function App() {
     }
   };
 
+  const handleItemFeedback = (item: Item, feedback: 'accept' | 'reject') => {
+    const updatedItem = { ...item, feedback };
+    
+    if (feedback === 'accept') {
+      // Remove from disliked if it exists there
+      setDislikedItems(prev => prev.filter(i => i.id !== item.id));
+      // Add to liked if not already there
+      setLikedItems(prev => {
+        const exists = prev.some(i => i.id === item.id);
+        return exists ? prev : [...prev, updatedItem];
+      });
+    } else {
+      // Remove from liked if it exists there
+      setLikedItems(prev => prev.filter(i => i.id !== item.id));
+      // Add to disliked if not already there
+      setDislikedItems(prev => {
+        const exists = prev.some(i => i.id === item.id);
+        return exists ? prev : [...prev, updatedItem];
+      });
+    }
+  };
+
+  const handleRemoveItem = (id: string, type: 'liked' | 'disliked') => {
+    if (type === 'liked') {
+      setLikedItems(prev => prev.filter(item => item.id !== id));
+    } else {
+      setDislikedItems(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
   return (
     <div className={`min-h-screen flex flex-col ${isDark ? "dark bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
-      <HeaderBar isDark={isDark} onToggle={toggle} />
+      <HeaderBar 
+        isDark={isDark} 
+        onToggle={toggle} 
+        onManageClick={() => setIsManagementOpen(true)} 
+      />
 
       <main className="flex-1 w-full px-4 py-6 space-y-6">
         <Card className="shadow-sm">
@@ -58,15 +111,51 @@ export default function App() {
         </Card>
 
         <div className="flex flex-col min-[600px]:flex-row gap-4">
-          <div className="flex-1"><Panel kind="youtube" accent="muted" topic={topic} objective={objective} guidelines={guidelines} /></div>
-          <div className="flex-1"><Panel kind="paper" accent="muted" topic={topic} objective={objective} guidelines={guidelines} /></div>
-          <div className="flex-1"><Panel kind="model" accent="muted" topic={topic} objective={objective} guidelines={guidelines} /></div>
+          <div className="flex-1">
+            <Panel 
+              kind="youtube" 
+              accent="muted" 
+              topic={topic} 
+              objective={objective} 
+              guidelines={guidelines}
+              onItemFeedback={handleItemFeedback}
+            />
+          </div>
+          <div className="flex-1">
+            <Panel 
+              kind="paper" 
+              accent="muted" 
+              topic={topic} 
+              objective={objective} 
+              guidelines={guidelines}
+              onItemFeedback={handleItemFeedback}
+            />
+          </div>
+          <div className="flex-1">
+            <Panel 
+              kind="model" 
+              accent="muted" 
+              topic={topic} 
+              objective={objective} 
+              guidelines={guidelines}
+              onItemFeedback={handleItemFeedback}
+            />
+          </div>
         </div>
       </main>
 
       <Button onClick={onSavePDF} className="fixed bottom-5 right-5 shadow-lg" size="lg">
         <Download className="h-4 w-4 mr-2" /> Save as PDF
       </Button>
+
+      <ManagementPanel
+        isOpen={isManagementOpen}
+        onClose={() => setIsManagementOpen(false)}
+        isDark={isDark}
+        likedItems={likedItems}
+        dislikedItems={dislikedItems}
+        onRemoveItem={handleRemoveItem}
+      />
     </div>
   );
 }

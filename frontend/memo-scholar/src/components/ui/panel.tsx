@@ -10,7 +10,21 @@ import type { Item, PanelKind } from "@/types";
 import { acceptOrReject } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
 
-export function Panel({ kind, accent = "muted", topic = "", objective = "", guidelines = "" }: { kind: PanelKind; accent?: string; topic?: string; objective?: string; guidelines?: string }) {
+export function Panel({ 
+  kind, 
+  accent = "muted", 
+  topic = "", 
+  objective = "", 
+  guidelines = "",
+  onItemFeedback
+}: { 
+  kind: PanelKind; 
+  accent?: string; 
+  topic?: string; 
+  objective?: string; 
+  guidelines?: string;
+  onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
+}) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => mockItems(kind));
 
@@ -33,8 +47,16 @@ export function Panel({ kind, accent = "muted", topic = "", objective = "", guid
   }
 
   const acceptOrRejectPanelItem = async (id: string, label: "accept" | "reject") => {
+    const item = items.find(it => it.id === id);
+    if (!item) return;
+
     // Update UI state immediately for visual feedback
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
+    
+    // Call the parent callback to manage liked/disliked items
+    if (onItemFeedback) {
+      onItemFeedback(item, label);
+    }
     
     try{
       console.log("Calling acceptOrReject API on the following data:", { panel_name: label, panel_name_content_id: id });
