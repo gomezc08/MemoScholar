@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Heart, ThumbsDown, Trash2 } from "lucide-react";
+import { X, Heart, ThumbsDown, Trash2, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ interface ManagementPanelProps {
   likedItems: Item[];
   dislikedItems: Item[];
   onRemoveItem: (id: string, type: 'liked' | 'disliked') => void;
+  onMoveItem: (id: string, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => void;
 }
 
 export function ManagementPanel({ 
@@ -20,7 +21,8 @@ export function ManagementPanel({
   isDark, 
   likedItems, 
   dislikedItems, 
-  onRemoveItem 
+  onRemoveItem,
+  onMoveItem
 }: ManagementPanelProps) {
   const [activeTab, setActiveTab] = useState<'liked' | 'disliked'>('liked');
 
@@ -35,7 +37,7 @@ export function ManagementPanel({
   };
 
   const renderItem = (item: Item, type: 'liked' | 'disliked') => (
-    <Card key={item.id} className={`mb-3 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+    <Card key={item.id} className={`mb-3 transition-all duration-200 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
@@ -45,14 +47,26 @@ export function ManagementPanel({
               {type === 'liked' ? 'Liked' : 'Disliked'}
             </Badge>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRemoveItem(item.id, type)}
-            className="ml-2 h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1 ml-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onMoveItem(item.id, type, type === 'liked' ? 'disliked' : 'liked')}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-blue-500 transition-colors"
+              title={`Move to ${type === 'liked' ? 'Disliked' : 'Liked'}`}
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRemoveItem(item.id, type)}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive transition-colors"
+              title="Remove item"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

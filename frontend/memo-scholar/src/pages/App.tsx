@@ -78,6 +78,31 @@ export default function App() {
     }
   };
 
+  const handleMoveItem = (id: string, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => {
+    // Find the item to move
+    const sourceList = fromType === 'liked' ? likedItems : dislikedItems;
+    const item = sourceList.find(item => item.id === id);
+    
+    if (!item) return;
+
+    // Update the item's feedback status
+    const updatedItem = { ...item, feedback: toType === 'liked' ? 'accept' as const : 'reject' as const };
+
+    // Remove from source list
+    if (fromType === 'liked') {
+      setLikedItems(prev => prev.filter(item => item.id !== id));
+    } else {
+      setDislikedItems(prev => prev.filter(item => item.id !== id));
+    }
+
+    // Add to target list
+    if (toType === 'liked') {
+      setLikedItems(prev => [...prev, updatedItem]);
+    } else {
+      setDislikedItems(prev => [...prev, updatedItem]);
+    }
+  };
+
   return (
     <div className={`min-h-screen flex flex-col ${isDark ? "dark bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
       <HeaderBar 
@@ -155,6 +180,7 @@ export default function App() {
         likedItems={likedItems}
         dislikedItems={dislikedItems}
         onRemoveItem={handleRemoveItem}
+        onMoveItem={handleMoveItem}
       />
     </div>
   );

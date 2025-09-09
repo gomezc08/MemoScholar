@@ -20,7 +20,7 @@ export function HeaderBar({
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-12 w-12" 
+              className={`h-12 w-12 ${isDark ? 'border-white' : 'border-black'} border-2`} 
               aria-label="Manage items" 
               onClick={onManageClick}
             >
