@@ -10,7 +10,6 @@ import type { Item, PanelKind } from "@/types";
 import { acceptOrReject } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
 
-
 export function Panel({ kind, accent = "muted", topic = "", objective = "", guidelines = "" }: { kind: PanelKind; accent?: string; topic?: string; objective?: string; guidelines?: string }) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => mockItems(kind));
