@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { Check, X, RotateCcw, Youtube, FileText, Cpu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { mockItems } from "@/lib/mock";
@@ -60,7 +59,6 @@ export function Panel({ kind, accent = "muted", topic = "", objective = "", guid
           <CardTitle className="flex items-center gap-2 text-lg">
             {icon}
             {label}
-            <Badge variant="secondary" className="ml-2">Panel</Badge>
           </CardTitle>
           <Button size="sm" variant="outline" onClick={regenerate}>
             <RotateCcw className="h-4 w-4 mr-1" /> Regenerate
