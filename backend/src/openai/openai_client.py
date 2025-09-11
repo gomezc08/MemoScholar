@@ -4,15 +4,35 @@ import openai
 from openai import OpenAI
 from dotenv import load_dotenv
 import json
+from ..utils.logging_config import get_logger
+
+# Initialize logger for this module
+logger = get_logger(__name__)
 
 def run_request(
-    messages: List[Dict[str, Any]],
-    tools: List[Dict[str, Any]],
-    tool_registry: Dict[str, Any],
+    prompt: str,
     model: str = "gpt-4o-mini",
     temperature: float = 0.1,
     max_tokens: int = 4000,
+    system_message: Optional[str] = None
 ) -> Dict[str, Any]:
+    """
+    Make a request to OpenAI API to generate a JSON schema.
+    
+    Args:
+        prompt (str): The main prompt containing the UIA listener data
+        model (str): OpenAI model to use (default: gpt-4o-mini)
+        temperature (float): Creativity level (0.0 = focused, 1.0 = creative)
+        max_tokens (int): Maximum tokens for the response
+        system_message (str, optional): Additional system instructions
+    
+    Returns:
+        Dict[str, Any]: OpenAI API response
+        
+    Raises:
+        ValueError: If OPENAI_API_KEY environment variable is not set
+        Exception: For other API errors
+    """
     
     # Get API key from environment
     load_dotenv()
@@ -22,57 +42,56 @@ def run_request(
     
     # Initialize OpenAI client
     client = OpenAI(api_key=api_key)
-
+    
+    # Prepare messages
+    messages = []
+    
+    # Add system message if provided
+    if system_message:
+        messages.append({
+            "role": "system",
+            "content": system_message
+        })
+    
+    # Add user message with the prompt
+    messages.append({
+        "role": "user",
+        "content": prompt
+    })
+    
     try:
-        # Make the API call - recieve back a response on the type of tool(s) to use.
-        tool_call_choices = client.chat.completions.create(
+        # Make the API call
+        response = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
-            max_tokens=max_tokens,
-            tools=tools,
-            tool_choice="auto"
+            max_tokens=max_tokens
         )
         
-        # Extract the tool call choices.
-        tool_calls = tool_call_choices.choices[0].message
+        # Extract the response content
+        content = response.choices[0].message.content
+        logger.info(f"OpenAI API call successful. Tokens used: {response.usage.total_tokens}")
         
-        # Add the tool call choices to the messages.
-        messages.append({"role": "assistant", "content": tool_calls.content, "tool_calls": tool_calls.tool_calls})
-
-        # Execute each tool call.
-        for tool_call in tool_calls.tool_calls:
-            # Get the tool call information.
-            tool_name = tool_call.function.name
-            args_json = tool_call.function.arguments or "{}"
-            executor = tool_registry.get(tool_name)
-
-            # Execute the tool call.
-            if executor:
-                try:
-                    args = json.loads(args_json)
-                    tool_result = executor(**args)
-                except Exception as e:
-                    tool_result = f"Error executing tool {tool_name}: {str(e)}"
-            
-            # Add the tool call result to the messages.
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "name": tool_name,
-                "content": str(tool_result)
-            })    
-
-        # Return the messages.
-        return messages
+        return {
+            "success": True,
+            "content": content,
+            "model": model,
+            "usage": {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+        }
         
     except openai.APIError as e:
+        logger.error(f"OpenAI API error: {str(e)}")
         return {
             "success": False,
             "error": f"OpenAI API error: {str(e)}",
             "error_type": "api_error"
         }
     except Exception as e:
+        logger.error(f"Unexpected error in OpenAI call: {str(e)}")
         return {
             "success": False,
             "error": f"Unexpected error: {str(e)}",
