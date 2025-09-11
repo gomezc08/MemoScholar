@@ -1,8 +1,13 @@
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import openai
 from openai import OpenAI
 from dotenv import load_dotenv
+import json
+from ..utils.logging_config import get_logger
+
+# Initialize logger for this module
+logger = get_logger(__name__)
 
 def run_request(
     prompt: str,
@@ -65,6 +70,7 @@ def run_request(
         
         # Extract the response content
         content = response.choices[0].message.content
+        logger.info(f"OpenAI API call successful. Tokens used: {response.usage.total_tokens}")
         
         return {
             "success": True,
@@ -74,17 +80,18 @@ def run_request(
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens
-            },
-            "raw_response": response
+            }
         }
         
     except openai.APIError as e:
+        logger.error(f"OpenAI API error: {str(e)}")
         return {
             "success": False,
             "error": f"OpenAI API error: {str(e)}",
             "error_type": "api_error"
         }
     except Exception as e:
+        logger.error(f"Unexpected error in OpenAI call: {str(e)}")
         return {
             "success": False,
             "error": f"Unexpected error: {str(e)}",
