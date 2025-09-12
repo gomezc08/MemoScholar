@@ -16,22 +16,9 @@ export default function App() {
   const [objective, setObjective] = useState("");
   const [guidelines, setGuidelines] = useState("");
   const [isManagementOpen, setIsManagementOpen] = useState(false);
-  const [likedItems, setLikedItems] = useState<Item[]>([
-    {
-      id: "demo-liked-1",
-      title: "Introduction to Graph Neural Networks",
-      meta: { channel: "AI Explained", duration: "15:30" },
-      feedback: "accept"
-    }
-  ]);
-  const [dislikedItems, setDislikedItems] = useState<Item[]>([
-    {
-      id: "demo-disliked-1", 
-      title: "Outdated Machine Learning Tutorial",
-      meta: { channel: "OldTech", duration: "8:45" },
-      feedback: "reject"
-    }
-  ]);
+  const [youtubeItems, setYoutubeItems] = useState<Item[]>([]);
+  const [likedItems, setLikedItems] = useState<Item[]>([]);
+  const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
   const { isDark, toggle } = useTheme();
 
   const onSavePDF = () => window.print();
@@ -40,8 +27,28 @@ export default function App() {
     console.log("Payload:", { topic, objective, guidelines }); // Debug log
     try { 
       console.log("Calling generateSubmission API...");
-      const result = await generateSubmission({ topic, objective, guidelines }); 
+      const result = await generateSubmission(topic, objective, guidelines); 
       console.log("Submission generated:", result); 
+      
+      // Handle the new API response format
+      if (result.success && result.youtube) {
+        // Convert YouTube videos to panel items
+        const youtubeItems = result.youtube.map((video: any, index: number) => ({
+          id: `youtube-${index}-${Date.now()}`,
+          title: video.video_title,
+          meta: {
+            channel: "YouTube", // We could extract channel from video data if needed
+            duration: video.video_duration,
+            views: video.video_views,
+            likes: video.video_likes,
+            video_url: video.video_url
+          },
+          feedback: undefined as "accept" | "reject" | undefined
+        }));
+        
+        console.log("Created YouTube items:", youtubeItems);
+        setYoutubeItems(youtubeItems);
+      }
     }
     catch (e) { 
       console.error("Error generating submission:", e); 
@@ -143,6 +150,7 @@ export default function App() {
               topic={topic} 
               objective={objective} 
               guidelines={guidelines}
+              items={youtubeItems}
               onItemFeedback={handleItemFeedback}
             />
           </div>

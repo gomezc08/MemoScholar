@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Check, X, RotateCcw, Youtube, FileText, Cpu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ export function Panel({
   topic = "", 
   objective = "", 
   guidelines = "",
+  items: externalItems,
   onItemFeedback
 }: { 
   kind: PanelKind; 
@@ -23,10 +24,18 @@ export function Panel({
   topic?: string; 
   objective?: string; 
   guidelines?: string;
+  items?: Item[];
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
 }) {
   const [instructions, setInstructions] = useState("");
-  const [items, setItems] = useState<Item[]>(() => mockItems(kind));
+  const [items, setItems] = useState<Item[]>(() => externalItems || mockItems(kind));
+
+  // Update items when externalItems change
+  useEffect(() => {
+    if (externalItems) {
+      setItems(externalItems);
+    }
+  }, [externalItems]);
 
   const icon =
     kind === "youtube" ? <Youtube className="h-4 w-4" /> :
@@ -40,6 +49,11 @@ export function Panel({
       console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
       const result = await generateSubmissionIndividualPanel({ panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
       console.log("Submission generated:", result); 
+      
+      // Update items with the API response
+      if (result && result.items) {
+        setItems(result.items);
+      }
     } 
     catch (e) {
       console.error("Error generating submission:", e); 
@@ -95,7 +109,12 @@ export function Panel({
         />
         <Separator />
         <div className="grid grid-cols-1 gap-3">
-          {items.map((it) => (
+          {items.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              No items yet. Click "Regenerate" to generate content for this panel.
+            </div>
+          ) : (
+            items.map((it) => (
             <motion.div
               key={it.id}
               initial={{ opacity: 0, y: 8 }}
@@ -109,13 +128,28 @@ export function Panel({
               exit={{ opacity: 0 }}
               className="flex items-start justify-between rounded-xl border p-3 transition-colors"
             >
-              <div className="space-y-1">
-                <div className="font-medium leading-tight">{it.title}</div>
-                <div className="text-xs text-muted-foreground">
-                  {kind === "youtube" && <span>{it.meta.channel} • {it.meta.duration}</span>}
-                  {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
-                  {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
-                </div>
+              <div className="space-y-1 flex-1">
+                {kind === "youtube" && it.meta.video_url ? (
+                  <a 
+                    href={it.meta.video_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="block hover:opacity-80 transition-opacity"
+                  >
+                    <div className="font-medium leading-tight cursor-pointer hover:underline">{it.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>
+                    </div>
+                  </a>
+                ) : (
+                  <div>
+                    <div className="font-medium leading-tight">{it.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
+                      {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:text-red-700">
@@ -126,7 +160,8 @@ export function Panel({
                 </Button>
               </div>
             </motion.div>
-          ))}
+            ))
+          )}
         </div>
       </CardContent>
     </Card>

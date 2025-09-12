@@ -1,4 +1,5 @@
-export async function generateSubmission(payload: { topic: string; objective: string; guidelines: string }) {
+export async function generateSubmission(topic: string, objective: string, guidelines: string) {
+  const payload = { topic, objective, guidelines };
   const res = await fetch("/api/generate_submission/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

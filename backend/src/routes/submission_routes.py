@@ -25,6 +25,7 @@ def generate_submission():
         data = request.get_json()
         
         # Validate required fields
+        logger.info(f"DATA: {data}")
         required_fields = ['topic', 'objective', 'guidelines']
         for field in required_fields:
             if field not in data:
