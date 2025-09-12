@@ -17,22 +17,8 @@ export default function App() {
   const [guidelines, setGuidelines] = useState("");
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [youtubeItems, setYoutubeItems] = useState<Item[]>([]);
-  const [likedItems, setLikedItems] = useState<Item[]>([
-    {
-      id: "demo-liked-1",
-      title: "Introduction to Graph Neural Networks",
-      meta: { channel: "AI Explained", duration: "15:30" },
-      feedback: "accept"
-    }
-  ]);
-  const [dislikedItems, setDislikedItems] = useState<Item[]>([
-    {
-      id: "demo-disliked-1", 
-      title: "Outdated Machine Learning Tutorial",
-      meta: { channel: "OldTech", duration: "8:45" },
-      feedback: "reject"
-    }
-  ]);
+  const [likedItems, setLikedItems] = useState<Item[]>([]);
+  const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
   const { isDark, toggle } = useTheme();
 
   const onSavePDF = () => window.print();
