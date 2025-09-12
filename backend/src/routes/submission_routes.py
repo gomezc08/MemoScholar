@@ -41,7 +41,7 @@ def generate_submission():
         
         return jsonify({
             'success': True,
-            'response': response
+            **youtube_data
         }), 200
     except Exception as e:
         logger.error(f"Exception in generate_submission: {str(e)}")
