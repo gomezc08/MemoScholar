@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { mockItems } from "@/lib/mock";
 import type { Item, PanelKind } from "@/types";
 import { acceptOrReject } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
@@ -26,7 +25,7 @@ export function Panel({
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
 }) {
   const [instructions, setInstructions] = useState("");
-  const [items, setItems] = useState<Item[]>(() => mockItems(kind));
+  const [items, setItems] = useState<Item[]>([]);
 
   const icon =
     kind === "youtube" ? <Youtube className="h-4 w-4" /> :
@@ -40,6 +39,11 @@ export function Panel({
       console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
       const result = await generateSubmissionIndividualPanel({ panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
       console.log("Submission generated:", result); 
+      
+      // Update items with the API response
+      if (result && result.items) {
+        setItems(result.items);
+      }
     } 
     catch (e) {
       console.error("Error generating submission:", e); 
@@ -95,7 +99,12 @@ export function Panel({
         />
         <Separator />
         <div className="grid grid-cols-1 gap-3">
-          {items.map((it) => (
+          {items.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              No items yet. Click "Regenerate" to generate content for this panel.
+            </div>
+          ) : (
+            items.map((it) => (
             <motion.div
               key={it.id}
               initial={{ opacity: 0, y: 8 }}
@@ -126,7 +135,8 @@ export function Panel({
                 </Button>
               </div>
             </motion.div>
-          ))}
+            ))
+          )}
         </div>
       </CardContent>
     </Card>
