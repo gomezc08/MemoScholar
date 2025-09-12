@@ -54,7 +54,8 @@ export default function App() {
             channel: "YouTube", // We could extract channel from video data if needed
             duration: video.video_duration,
             views: video.video_views,
-            likes: video.video_likes
+            likes: video.video_likes,
+            video_url: video.video_url
           },
           feedback: undefined as "accept" | "reject" | undefined
         }));

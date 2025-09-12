@@ -8,6 +8,7 @@ export interface Item {
     duration?: string;
     views?: string;
     likes?: string;
+    video_url?: string;
     venue?: string;
     year?: number;
     framework?: string;

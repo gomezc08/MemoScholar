@@ -128,13 +128,28 @@ export function Panel({
               exit={{ opacity: 0 }}
               className="flex items-start justify-between rounded-xl border p-3 transition-colors"
             >
-              <div className="space-y-1">
-                <div className="font-medium leading-tight">{it.title}</div>
-                <div className="text-xs text-muted-foreground">
-                  {kind === "youtube" && <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>}
-                  {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
-                  {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
-                </div>
+              <div className="space-y-1 flex-1">
+                {kind === "youtube" && it.meta.video_url ? (
+                  <a 
+                    href={it.meta.video_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="block hover:opacity-80 transition-opacity"
+                  >
+                    <div className="font-medium leading-tight cursor-pointer hover:underline">{it.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>
+                    </div>
+                  </a>
+                ) : (
+                  <div>
+                    <div className="font-medium leading-tight">{it.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
+                      {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:text-red-700">
