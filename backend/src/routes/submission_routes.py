@@ -34,12 +34,12 @@ def generate_submission():
                     'success': False
                 }), 400
         
-        response = YoutubeGenerator().generate_youtube_videos(data)
+        youtube_data = YoutubeGenerator().generate_youtube_videos(data)
         logger.info("SUCCESSFULLY RAN API CALL")
         
         return jsonify({
             'success': True,
-            'response': response
+            **youtube_data
         }), 200
     except Exception as e:
         logger.error(f"Exception in generate_submission: {str(e)}")

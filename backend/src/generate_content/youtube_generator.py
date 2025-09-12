@@ -146,7 +146,26 @@ class YoutubeGenerator:
             )
             self.logger.info(f"OpenAI API response success: {response.get('success', False)}")
             self.logger.info(f"Response content length: {len(response.get('content', ''))} characters")
-            return response
+            
+            # Parse the JSON content from the response
+            content = response.get('content', '')
+            if content.startswith('```json'):
+                # Remove markdown code block formatting
+                content = content.replace('```json', '').replace('```', '').strip()
+            
+            try:
+                parsed_data = json.loads(content)
+                # Extract youtube_videos and rename to youtube
+                youtube_videos = parsed_data.get('youtube_videos', [])
+                return {
+                    'youtube': youtube_videos,
+                    'success': True
+                }
+            except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse JSON content: {str(e)}")
+                self.logger.error(f"Content: {content}")
+                raise ValueError(f"Invalid JSON response from OpenAI: {str(e)}")
+                
         except Exception as e:
             self.logger.error(f"OpenAI API failed: {str(e)}")
             raise
