@@ -40,7 +40,7 @@ export default function App() {
     console.log("Payload:", { topic, objective, guidelines }); // Debug log
     try { 
       console.log("Calling generateSubmission API...");
-      const result = await generateSubmission({ topic, objective, guidelines }); 
+      const result = await generateSubmission(topic, objective, guidelines); 
       console.log("Submission generated:", result); 
     }
     catch (e) { 

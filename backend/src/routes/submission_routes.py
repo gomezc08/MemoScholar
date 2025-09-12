@@ -25,6 +25,7 @@ def generate_submission():
         data = request.get_json()
         
         # Validate required fields
+        logger.info(f"DATA: {data}")
         required_fields = ['topic', 'objective', 'guidelines']
         for field in required_fields:
             if field not in data:
@@ -34,7 +35,8 @@ def generate_submission():
                     'success': False
                 }), 400
         
-        response = YoutubeGenerator().generate_youtube_videos(data)
+        #response = YoutubeGenerator().generate_youtube_videos(data)
+        response = f"Generated submission for {data['topic']} with {data['objective']} and {data['guidelines']}s"
         logger.info("SUCCESSFULLY RAN API CALL")
         
         return jsonify({
