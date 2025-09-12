@@ -16,6 +16,7 @@ export default function App() {
   const [objective, setObjective] = useState("");
   const [guidelines, setGuidelines] = useState("");
   const [isManagementOpen, setIsManagementOpen] = useState(false);
+  const [youtubeItems, setYoutubeItems] = useState<Item[]>([]);
   const [likedItems, setLikedItems] = useState<Item[]>([
     {
       id: "demo-liked-1",
@@ -42,6 +43,25 @@ export default function App() {
       console.log("Calling generateSubmission API...");
       const result = await generateSubmission(topic, objective, guidelines); 
       console.log("Submission generated:", result); 
+      
+      // Handle the new API response format
+      if (result.success && result.youtube) {
+        // Convert YouTube videos to panel items
+        const youtubeItems = result.youtube.map((video: any, index: number) => ({
+          id: `youtube-${index}-${Date.now()}`,
+          title: video.video_title,
+          meta: {
+            channel: "YouTube", // We could extract channel from video data if needed
+            duration: video.video_duration,
+            views: video.video_views,
+            likes: video.video_likes
+          },
+          feedback: undefined as "accept" | "reject" | undefined
+        }));
+        
+        console.log("Created YouTube items:", youtubeItems);
+        setYoutubeItems(youtubeItems);
+      }
     }
     catch (e) { 
       console.error("Error generating submission:", e); 
@@ -143,6 +163,7 @@ export default function App() {
               topic={topic} 
               objective={objective} 
               guidelines={guidelines}
+              items={youtubeItems}
               onItemFeedback={handleItemFeedback}
             />
           </div>

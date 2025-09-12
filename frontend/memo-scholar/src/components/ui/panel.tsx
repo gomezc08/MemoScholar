@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Check, X, RotateCcw, Youtube, FileText, Cpu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { mockItems } from "@/lib/mock";
 import type { Item, PanelKind } from "@/types";
 import { acceptOrReject } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
@@ -15,6 +16,7 @@ export function Panel({
   topic = "", 
   objective = "", 
   guidelines = "",
+  items: externalItems,
   onItemFeedback
 }: { 
   kind: PanelKind; 
@@ -22,10 +24,18 @@ export function Panel({
   topic?: string; 
   objective?: string; 
   guidelines?: string;
+  items?: Item[];
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
 }) {
   const [instructions, setInstructions] = useState("");
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<Item[]>(() => externalItems || mockItems(kind));
+
+  // Update items when externalItems change
+  useEffect(() => {
+    if (externalItems) {
+      setItems(externalItems);
+    }
+  }, [externalItems]);
 
   const icon =
     kind === "youtube" ? <Youtube className="h-4 w-4" /> :
@@ -121,7 +131,7 @@ export function Panel({
               <div className="space-y-1">
                 <div className="font-medium leading-tight">{it.title}</div>
                 <div className="text-xs text-muted-foreground">
-                  {kind === "youtube" && <span>{it.meta.channel} • {it.meta.duration}</span>}
+                  {kind === "youtube" && <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>}
                   {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
                   {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
                 </div>

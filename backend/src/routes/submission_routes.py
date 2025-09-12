@@ -35,8 +35,7 @@ def generate_submission():
                     'success': False
                 }), 400
         
-        #response = YoutubeGenerator().generate_youtube_videos(data)
-        response = f"Generated submission for {data['topic']} with {data['objective']} and {data['guidelines']}s"
+        youtube_data = YoutubeGenerator().generate_youtube_videos(data)
         logger.info("SUCCESSFULLY RAN API CALL")
         
         return jsonify({

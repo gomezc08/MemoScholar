@@ -6,6 +6,8 @@ export interface Item {
   meta: {
     channel?: string;
     duration?: string;
+    views?: string;
+    likes?: string;
     venue?: string;
     year?: number;
     framework?: string;
