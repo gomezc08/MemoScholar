@@ -133,6 +133,8 @@ class YoutubeGenerator:
         - Guidelines: {data['guidelines']}
         - Special Instructions: {special_instructions}
         - Avoid duplicates: {past_recommendations}
+
+        IMPORTANT: Make sure to follow the special instructions carefully.
         
         Return JSON in this format: {{"youtube_videos": [...]}}
         """

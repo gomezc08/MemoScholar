@@ -19,10 +19,12 @@ export default function App() {
   const [youtubeItems, setYoutubeItems] = useState<Item[]>([]);
   const [likedItems, setLikedItems] = useState<Item[]>([]);
   const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
   const { isDark, toggle } = useTheme();
 
   const onSavePDF = () => window.print();
   const onRun = async () => {
+    setIsGenerating(true);
     console.log("Run button clicked!"); // Debug log
     console.log("Payload:", { topic, objective, guidelines }); // Debug log
     try { 
@@ -52,6 +54,8 @@ export default function App() {
     }
     catch (e) { 
       console.error("Error generating submission:", e); 
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -122,8 +126,9 @@ export default function App() {
         <Card className="shadow-sm">
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-lg">Project Details</CardTitle>
-            <Button onClick={onRun} variant="default">
-              <Save className="h-4 w-4 mr-1" /> Run
+            <Button onClick={onRun} variant="default" disabled={isGenerating}>
+              <Save className={`h-4 w-4 mr-1 ${isGenerating ? 'animate-spin' : ''}`} /> 
+              {isGenerating ? 'Generating...' : 'Run'}
             </Button>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
