@@ -66,12 +66,15 @@ def generate_submission_individual_panel():
                     'success': False
                 }), 400
         
-        # TODO: call our function (should be where we call all specific panel AI function).
+        youtube_data = YoutubeGenerator().generate_youtube_videos(data)
+        logger.info("SUCCESSFULLY RAN API CALL")
+        
         return jsonify({
             'success': True,
-            'data': data
+            **youtube_data
         }), 200
     except Exception as e:
+        logger.error(f"Exception in generate_submission: {str(e)}")
         return jsonify({
             'error': str(e),
             'success': False
