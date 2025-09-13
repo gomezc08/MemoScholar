@@ -29,6 +29,7 @@ export function Panel({
 }) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => externalItems || mockItems(kind));
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Update items when externalItems change
   useEffect(() => {
@@ -45,18 +46,36 @@ export function Panel({
   const label = kind === "youtube" ? "YouTube" : kind === "paper" ? "Papers" : "Models";
 
   const regenerate = async () => {
+    setIsRegenerating(true);
     try{
       console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
-      const result = await generateSubmissionIndividualPanel({ panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
+      const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label);
       console.log("Submission generated:", result); 
       
-      // Update items with the API response
-      if (result && result.items) {
-        setItems(result.items);
+      // Handle the API response format - backend returns youtube array
+      if (result.success && result.youtube) {
+        // Convert YouTube videos to panel items
+        const youtubeItems = result.youtube.map((video: any, index: number) => ({
+          id: `youtube-${index}-${Date.now()}`,
+          title: video.video_title,
+          meta: {
+            channel: "YouTube", // We could extract channel from video data if needed
+            duration: video.video_duration,
+            views: video.video_views,
+            likes: video.video_likes,
+            video_url: video.video_url
+          },
+          feedback: undefined as "accept" | "reject" | undefined
+        }));
+        
+        console.log("Created YouTube items:", youtubeItems);
+        setItems(youtubeItems);
       }
     } 
     catch (e) {
       console.error("Error generating submission:", e); 
+    } finally {
+      setIsRegenerating(false);
     }
   }
 
@@ -95,8 +114,9 @@ export function Panel({
             {icon}
             {label}
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={regenerate}>
-            <RotateCcw className="h-4 w-4 mr-1" /> Regenerate
+          <Button size="sm" variant="outline" onClick={regenerate} disabled={isRegenerating}>
+            <RotateCcw className={`h-4 w-4 mr-1 ${isRegenerating ? 'animate-spin' : ''}`} /> 
+            {isRegenerating ? 'Generating...' : 'Regenerate'}
           </Button>
         </div>
       </CardHeader>
