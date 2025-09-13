@@ -20,10 +20,28 @@ export default function App() {
   const [likedItems, setLikedItems] = useState<Item[]>([]);
   const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [validationError, setValidationError] = useState<string>("");
   const { isDark, toggle } = useTheme();
 
   const onSavePDF = () => window.print();
   const onRun = async () => {
+    // Clear previous validation errors
+    setValidationError("");
+    
+    // Frontend validation
+    if (!topic.trim()) {
+      setValidationError("Topic is required");
+      return;
+    }
+    if (!objective.trim()) {
+      setValidationError("Objective is required");
+      return;
+    }
+    if (!guidelines.trim()) {
+      setValidationError("Guidelines are required");
+      return;
+    }
+
     setIsGenerating(true);
     console.log("Run button clicked!"); // Debug log
     console.log("Payload:", { topic, objective, guidelines }); // Debug log
@@ -50,10 +68,13 @@ export default function App() {
         
         console.log("Created YouTube items:", youtubeItems);
         setYoutubeItems(youtubeItems);
+      } else if (result.error) {
+        setValidationError(result.error);
       }
     }
     catch (e) { 
-      console.error("Error generating submission:", e); 
+      console.error("Error generating submission:", e);
+      setValidationError("Failed to generate submission. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -132,6 +153,11 @@ export default function App() {
             </Button>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
+            {validationError && (
+              <div className="sm:col-span-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{validationError}</p>
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium">Topic</label>
               <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Graph Neural Networks for Recommendation" />
