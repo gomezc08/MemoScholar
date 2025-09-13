@@ -28,10 +28,10 @@ def generate_submission():
         logger.info(f"DATA: {data}")
         required_fields = ['topic', 'objective', 'guidelines']
         for field in required_fields:
-            if field not in data:
-                logger.warning(f"Missing required field: {field}")
+            if field not in data or not data[field] or data[field].strip() == '':
+                logger.warning(f"Missing or empty required field: {field}")
                 return jsonify({
-                    'error': f'Missing required field: {field}',
+                    'error': f'Missing or empty required field: {field}',
                     'success': False
                 }), 400
         
@@ -60,9 +60,9 @@ def generate_submission_individual_panel():
         # Validate required fields
         required_fields = ['topic', 'objective', 'guidelines', 'user_special_instructions', 'panel_name']
         for field in required_fields:
-            if field not in data:
+            if field not in data or not data[field] or data[field].strip() == '':
                 return jsonify({
-                    'error': f'Missing required field: {field}',
+                    'error': f'Missing or empty required field: {field}',
                     'success': False
                 }), 400
         
