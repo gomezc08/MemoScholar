@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, Save } from "lucide-react";
+import { Download, Play } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,7 +127,7 @@ export default function App() {
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-lg">Project Details</CardTitle>
             <Button onClick={onRun} variant="default" disabled={isGenerating}>
-              <Save className={`h-4 w-4 mr-1 ${isGenerating ? 'animate-spin' : ''}`} /> 
+              <Play className={`h-4 w-4 mr-1 ${isGenerating ? 'animate-spin' : ''}`} /> 
               {isGenerating ? 'Generating...' : 'Run'}
             </Button>
           </CardHeader>
