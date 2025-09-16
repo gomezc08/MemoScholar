@@ -109,8 +109,12 @@ class YoutubeGenerator:
 
     def generate_youtube_videos(self, data):
         # 1. Build search query from inputs
-        query = f"{data['topic']} {data['objective']}"
+        query = f"{data['topic']}; {data['objective']}. "
+        if "user_special_instructions" in data:
+            query += f" IMPORTANT:{data['user_special_instructions']}"
         
+        self.logger.info(f"Search query: {query}")
+            
         # 2. Call YouTube API directly
         try:
             raw_videos = self.search_youtube_videos(query, max_results=15)
@@ -121,7 +125,7 @@ class YoutubeGenerator:
         
         # 3. Single LLM call with real data
         # Handle optional fields with defaults
-        special_instructions = data.get('special_instructions', '')
+        special_instructions = data.get('user_special_instructions', '')
         past_recommendations = data.get('past_recommendations', '')
         
         prompt = f"""
