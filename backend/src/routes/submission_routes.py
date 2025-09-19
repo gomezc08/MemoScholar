@@ -3,6 +3,7 @@ import sys
 import os
 
 from ..generate_content.youtube_generator import YoutubeGenerator
+from ..generate_content.paper_generator import PaperGenerator
 from ..utils.logging_config import get_logger
 
 # Add the parent directory to the path to import from openai module
@@ -66,13 +67,20 @@ def generate_submission_individual_panel():
                     'success': False
                 }), 400
         
-        youtube_data = YoutubeGenerator().generate_youtube_videos(data)
-        logger.info("SUCCESSFULLY RAN API CALL")
-        
-        return jsonify({
-            'success': True,
-            **youtube_data
-        }), 200
+        if data['panel_name'] == 'paper':
+            paper_data = PaperGenerator().generate_paper(data)
+            return jsonify({
+                'success': True,
+                'panel_name': data['panel_name'],
+                'papers': paper_data
+            }), 200
+        elif data['panel_name'] == 'youtube':
+            youtube_data = YoutubeGenerator().generate_youtube_videos(data)
+            return jsonify({
+                'success': True,
+                'panel_name': data['panel_name'],
+                'youtube': youtube_data
+            }), 200
     except Exception as e:
         logger.error(f"Exception in generate_submission: {str(e)}")
         return jsonify({

@@ -7,7 +7,7 @@ class PaperGenerator:
     def __init__(self):
         self.url = None
 
-    def search_paper(self, query: str, max_results: int = 10):
+    def search_paper(self, query: str, max_results: int = 1):
         encoded_query = urllib.parse.quote(query)
         self.url = (
             f"http://export.arxiv.org/api/query?"
@@ -27,7 +27,7 @@ class PaperGenerator:
 
         # 2. Retrieve papers
         try:
-            raw_papers = self.search_youtube_papers(query, max_results=15)
+            raw_papers = self.search_paper(query, max_results=15)
         except Exception as e:
             raise
 
@@ -37,10 +37,10 @@ class PaperGenerator:
         past_recommendations = data.get('past_recommendations', '')
         
         prompt = f"""
-        Given these Academic papers videos about {data['topic']}:
+        Given these Academic papers about {data['topic']}:
         {json.dumps(raw_papers, indent=2, ensure_ascii=False)}
         
-        Select the 5 most relevant videos based on:
+        Select the 5 most relevant papers based on:
         - Objective: {data['objective']}
         - Guidelines: {data['guidelines']}
         - Special Instructions: {special_instructions}
