@@ -135,7 +135,3 @@ class PaperGenerator:
                 
         except Exception as e:
             raise   
-
-if __name__ == '__main__':
-    paper_generator = PaperGenerator()
-    print(paper_generator.search_paper('machine learning'))

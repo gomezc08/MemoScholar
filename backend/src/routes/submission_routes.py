@@ -37,11 +37,13 @@ def generate_submission():
                 }), 400
         
         youtube_data = YoutubeGenerator().generate_youtube_videos(data)
+        paper_data = PaperGenerator().generate_paper(data)
         logger.info("SUCCESSFULLY RAN API CALL")
         
         return jsonify({
             'success': True,
-            **youtube_data
+            **youtube_data,
+            **paper_data
         }), 200
     except Exception as e:
         logger.error(f"Exception in generate_submission: {str(e)}")
