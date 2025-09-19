@@ -67,19 +67,19 @@ def generate_submission_individual_panel():
                     'success': False
                 }), 400
         
-        if data['panel_name'] == 'paper':
+        if data['panel_name'] == 'Papers':
             paper_data = PaperGenerator().generate_paper(data)
             return jsonify({
                 'success': True,
                 'panel_name': data['panel_name'],
-                'papers': paper_data
+                'papers': paper_data.get('papers', [])
             }), 200
-        elif data['panel_name'] == 'youtube':
+        elif data['panel_name'] == 'YouTube':
             youtube_data = YoutubeGenerator().generate_youtube_videos(data)
             return jsonify({
                 'success': True,
                 'panel_name': data['panel_name'],
-                'youtube': youtube_data
+                'youtube': youtube_data.get('youtube', [])
             }), 200
     except Exception as e:
         logger.error(f"Exception in generate_submission: {str(e)}")
