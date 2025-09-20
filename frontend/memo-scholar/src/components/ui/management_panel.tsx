@@ -8,7 +8,6 @@ import type { Item } from "@/types";
 interface ManagementPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  isDark: boolean;
   likedItems: Item[];
   dislikedItems: Item[];
   onRemoveItem: (id: string, type: 'liked' | 'disliked') => void;
@@ -18,7 +17,6 @@ interface ManagementPanelProps {
 export function ManagementPanel({ 
   isOpen, 
   onClose, 
-  isDark, 
   likedItems, 
   dislikedItems, 
   onRemoveItem,
@@ -37,12 +35,12 @@ export function ManagementPanel({
   };
 
   const renderItem = (item: Item, type: 'liked' | 'disliked') => (
-    <Card key={item.id} className={`mb-3 transition-all duration-200 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+    <Card key={item.id} className="mb-3 transition-all duration-200 bg-zinc-900/60 shadow-xl shadow-black border-zinc-800/50">
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-sm mb-1 truncate">{item.title}</h4>
-            <p className="text-xs text-muted-foreground mb-2">{formatMeta(item)}</p>
+            <h4 className="font-medium text-sm mb-1 truncate text-white">{item.title}</h4>
+            <p className="text-xs text-zinc-400 mb-2">{formatMeta(item)}</p>
             <Badge variant={type === 'liked' ? 'default' : 'destructive'} className="text-xs">
               {type === 'liked' ? 'Liked' : 'Disliked'}
             </Badge>
@@ -52,7 +50,7 @@ export function ManagementPanel({
               variant="ghost"
               size="sm"
               onClick={() => onMoveItem(item.id, type, type === 'liked' ? 'disliked' : 'liked')}
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-blue-500 transition-colors"
+              className="h-8 w-8 p-0 text-zinc-700 hover:text-blue-500 transition-colors rounded-full"
               title={`Move to ${type === 'liked' ? 'Disliked' : 'Liked'}`}
             >
               <ArrowRightLeft className="h-4 w-4" />
@@ -61,7 +59,7 @@ export function ManagementPanel({
               variant="ghost"
               size="sm"
               onClick={() => onRemoveItem(item.id, type)}
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive transition-colors"
+              className="h-8 w-8 p-0 text-zinc-700 hover:text-destructive transition-colors rounded-full"
               title="Remove item"
             >
               <Trash2 className="h-4 w-4" />
@@ -78,7 +76,7 @@ export function ManagementPanel({
       <div 
         className={`fixed inset-0 z-40 transition-opacity duration-300 ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        } ${isDark ? 'bg-black/50' : 'bg-black/30'}`}
+        } bg-black/50`}
         onClick={onClose}
       />
       
@@ -86,20 +84,18 @@ export function ManagementPanel({
       <div 
         className={`fixed left-0 top-0 h-full w-1/3 z-50 transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } ${isDark ? 'bg-gray-900/95' : 'bg-white/95'} backdrop-blur-md border-r ${
-          isDark ? 'border-gray-700' : 'border-gray-200'
-        }`}
+        } bg-zinc-900/95 backdrop-blur-md border-r border-zinc-800`}
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className={`p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className="p-4 border-b border-zinc-800">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Manage Items</h2>
+              <h2 className="text-lg font-semibold text-white">Manage Items</h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 rounded-full"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -109,18 +105,18 @@ export function ManagementPanel({
             <div className="flex mt-4 space-x-1">
               <Button
                 variant={activeTab === 'liked' ? 'default' : 'ghost'}
+                className={`flex-1 ${activeTab === 'liked' ? 'bg-zinc-700' : 'text-zinc-700 hover:bg-zinc-700'}`}
                 size="sm"
                 onClick={() => setActiveTab('liked')}
-                className="flex-1"
               >
                 <Heart className="h-4 w-4 mr-2" />
                 Liked ({likedItems.length})
               </Button>
               <Button
                 variant={activeTab === 'disliked' ? 'default' : 'ghost'}
+                className={`flex-1 ${activeTab === 'disliked' ? 'bg-zinc-700' : 'text-zinc-700 hover:bg-zinc-700'}`}
                 size="sm"
                 onClick={() => setActiveTab('disliked')}
-                className="flex-1"
               >
                 <ThumbsDown className="h-4 w-4 mr-2" />
                 Disliked ({dislikedItems.length})
@@ -133,7 +129,7 @@ export function ManagementPanel({
             {activeTab === 'liked' ? (
               <div>
                 {likedItems.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-8 text-zinc-400">
                     <Heart className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No liked items yet</p>
                     <p className="text-sm">Items you like will appear here</p>
@@ -145,7 +141,7 @@ export function ManagementPanel({
             ) : (
               <div>
                 {dislikedItems.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-center py-8 text-zinc-400">
                     <ThumbsDown className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No disliked items yet</p>
                     <p className="text-sm">Items you dislike will appear here</p>

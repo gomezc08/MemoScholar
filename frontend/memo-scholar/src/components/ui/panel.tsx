@@ -12,7 +12,6 @@ import { generateSubmissionIndividualPanel } from "@/lib/api";
 
 export function Panel({ 
   kind, 
-  accent = "muted", 
   topic = "", 
   objective = "", 
   guidelines = "",
@@ -20,7 +19,6 @@ export function Panel({
   onItemFeedback
 }: { 
   kind: PanelKind; 
-  accent?: string; 
   topic?: string; 
   objective?: string; 
   guidelines?: string;
@@ -129,14 +127,20 @@ export function Panel({
   }
 
   return (
-    <Card className={`relative border-${accent}`}>
+    <Card className="relative bg-zinc-900/60 p-10 shadow-xl shadow-black border-zinc-800/50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex items-center gap-2 text-lg text-white">
             {icon}
             {label}
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={regenerate} disabled={isRegenerating}>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={regenerate} 
+            disabled={isRegenerating}
+            className={isRegenerating ? "bg-pink-500 hover:bg-pink-600 border-pink-500" : ""}
+          >
             <RotateCcw className={`h-4 w-4 mr-1 ${isRegenerating ? 'animate-spin' : ''}`} /> 
             {isRegenerating ? 'Generating...' : 'Regenerate'}
           </Button>
@@ -152,7 +156,7 @@ export function Panel({
         <Separator />
         <div className="grid grid-cols-1 gap-3">
           {items.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">
+            <div className="text-center text-zinc-400 py-8">
               No items yet. Click "Regenerate" to generate content for this panel.
             </div>
           ) : (
@@ -178,8 +182,8 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline">{it.title}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300">{it.title}</div>
+                    <div className="text-xs text-zinc-400">
                       <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>
                     </div>
                   </a>
@@ -190,20 +194,20 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline">{it.title}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300">{it.title}</div>
+                    <div className="text-xs text-zinc-400">
                       <span>{it.meta.venue} • {it.meta.year} • {it.meta.authors}</span>
                     </div>
                     {it.meta.summary && (
-                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      <div className="text-xs text-zinc-400 mt-1 line-clamp-2">
                         {it.meta.summary}
                       </div>
                     )}
                   </a>
                 ) : (
                   <div>
-                    <div className="font-medium leading-tight">{it.title}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-medium leading-tight text-white">{it.title}</div>
+                    <div className="text-xs text-zinc-400">
                       {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
                       {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
                     </div>
@@ -211,10 +215,10 @@ export function Panel({
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:text-red-700">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:bg-zinc-700 hover:text-red-400 rounded-full">
                   <X className="h-10 w-10" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:text-green-700">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:bg-zinc-700 hover:text-green-400 rounded-full">
                   <Check className="h-10 w-10" />
                 </Button>
               </div>
