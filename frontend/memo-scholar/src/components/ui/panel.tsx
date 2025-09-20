@@ -209,10 +209,10 @@ export function Panel({
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:text-red-700">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-zinc-400 hover:bg-zinc-700 hover:text-red-400">
                   <X className="h-10 w-10" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:text-green-700">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-zinc-400 hover:bg-zinc-700 hover:text-green-400">
                   <Check className="h-10 w-10" />
                 </Button>
               </div>
