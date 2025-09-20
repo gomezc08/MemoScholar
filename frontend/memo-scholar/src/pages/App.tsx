@@ -221,16 +221,6 @@ export default function App() {
               onItemFeedback={handleItemFeedback}
             />
           </div>
-          <div className="flex-1">
-            <Panel 
-              kind="model" 
-              accent="muted" 
-              topic={topic} 
-              objective={objective} 
-              guidelines={guidelines}
-              onItemFeedback={handleItemFeedback}
-            />
-          </div>
         </div>
       </main>
 
