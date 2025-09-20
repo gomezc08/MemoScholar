@@ -6,48 +6,6 @@ from ..utils.logging_config import get_logger
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
-YOTUBE_PROMPT = """
-You are a research assistant that will use tools to fetch real YouTube videos and return them in a specific JSON format.
-
-## Your Task
-Use the search_youtube_videos tool to find 10 relevant YouTube videos based on the user's research requirements, then format the results as specified below.
-
-## Inputs
-1. Research topic: {topic}
-2. Research objective: {objective}
-3. Research guidelines: {guidelines}
-4. Special instructions: {special_instructions}
-5. Past recommendations (avoid duplicates): {past_recommendations}
-
-## Instructions
-- Use the search_youtube_videos tool to fetch real video data
-- Do NOT make up or fabricate any video information
-- Filter results to match the research topic, objective, and guidelines
-- Follow the special instructions carefully
-- Exclude any videos that appear in past recommendations
-- Return exactly 10 videos in the specified JSON format
-
-## Required JSON Output Format
-{json.dumps({
-    "youtube_videos": [
-        {
-            "video_title": "string",
-            "video_description": "string", 
-            "video_duration": "string",
-            "video_views": "string",
-            "video_likes": "string",
-            "video_url": "string"
-        }
-    ]
-}, indent=2)}
-
-## Process
-1. Call search_youtube_videos with a query derived from the research topic and objective
-2. Review the returned video data
-3. Select the 10 most relevant videos that meet the criteria
-4. Format them according to the JSON schema above
-5. Ensure no duplicates from past recommendations
-"""
 
 class YoutubeGenerator:
     def __init__(self):

@@ -17,6 +17,7 @@ export default function App() {
   const [guidelines, setGuidelines] = useState("");
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [youtubeItems, setYoutubeItems] = useState<Item[]>([]);
+  const [paperItems, setPaperItems] = useState<Item[]>([]);
   const [likedItems, setLikedItems] = useState<Item[]>([]);
   const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -48,26 +49,50 @@ export default function App() {
     try { 
       console.log("Calling generateSubmission API...");
       const result = await generateSubmission(topic, objective, guidelines); 
-      console.log("Submission generated:", result); 
+      console.log("Submission generated:", result);
+      console.log("YouTube array:", result.youtube);
+      console.log("Papers array:", result.papers); 
       
       // Handle the new API response format
-      if (result.success && result.youtube) {
-        // Convert YouTube videos to panel items
-        const youtubeItems = result.youtube.map((video: any, index: number) => ({
-          id: `youtube-${index}-${Date.now()}`,
-          title: video.video_title,
-          meta: {
-            channel: "YouTube", // We could extract channel from video data if needed
-            duration: video.video_duration,
-            views: video.video_views,
-            likes: video.video_likes,
-            video_url: video.video_url
-          },
-          feedback: undefined as "accept" | "reject" | undefined
-        }));
+      if (result.success) {
+        // Handle YouTube videos
+        if (result.youtube && Array.isArray(result.youtube)) {
+          const youtubeItems = result.youtube.map((video: any, index: number) => ({
+            id: `youtube-${index}-${Date.now()}`,
+            title: video.video_title,
+            meta: {
+              channel: "YouTube", // We could extract channel from video data if needed
+              duration: video.video_duration,
+              views: video.video_views,
+              likes: video.video_likes,
+              video_url: video.video_url
+            },
+            feedback: undefined as "accept" | "reject" | undefined
+          }));
+          
+          console.log("Created YouTube items:", youtubeItems);
+          setYoutubeItems(youtubeItems);
+        }
         
-        console.log("Created YouTube items:", youtubeItems);
-        setYoutubeItems(youtubeItems);
+        // Handle papers
+        if (result.papers && Array.isArray(result.papers)) {
+          const paperItems = result.papers.map((paper: any, index: number) => ({
+            id: `paper-${index}-${Date.now()}`,
+            title: paper.title,
+            meta: {
+              venue: "ArXiv", // ArXiv is the source
+              year: new Date(paper.published).getFullYear(),
+              authors: paper.authors ? paper.authors.join(', ') : 'Unknown',
+              link: paper.link,
+              pdf_link: paper.pdf_link,
+              summary: paper.summary
+            },
+            feedback: undefined as "accept" | "reject" | undefined
+          }));
+          
+          console.log("Created paper items:", paperItems);
+          setPaperItems(paperItems);
+        }
       } else if (result.error) {
         setValidationError(result.error);
       }
@@ -192,6 +217,7 @@ export default function App() {
               topic={topic} 
               objective={objective} 
               guidelines={guidelines}
+              items={paperItems}
               onItemFeedback={handleItemFeedback}
             />
           </div>

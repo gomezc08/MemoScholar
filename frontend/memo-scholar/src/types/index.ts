@@ -13,6 +13,10 @@ export interface Item {
     year?: number;
     framework?: string;
     vram?: string;
+    authors?: string;
+    link?: string;
+    pdf_link?: string;
+    summary?: string;
   };
   feedback?: "accept" | "reject";
 }

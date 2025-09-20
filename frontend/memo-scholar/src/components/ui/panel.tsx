@@ -28,7 +28,7 @@ export function Panel({
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
 }) {
   const [instructions, setInstructions] = useState("");
-  const [items, setItems] = useState<Item[]>(() => externalItems || mockItems(kind));
+  const [items, setItems] = useState<Item[]>(() => externalItems || (kind === "model" ? mockItems(kind) : []));
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Update items when externalItems change
@@ -50,26 +50,48 @@ export function Panel({
     try{
       console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
       const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label);
-      console.log("Submission generated:", result); 
+      console.log("Submission generated:", result);
+      console.log("YouTube array:", result.youtube);
+      console.log("Papers array:", result.papers); 
       
-      // Handle the API response format - backend returns youtube array
-      if (result.success && result.youtube) {
-        // Convert YouTube videos to panel items
-        const youtubeItems = result.youtube.map((video: any, index: number) => ({
-          id: `youtube-${index}-${Date.now()}`,
-          title: video.video_title,
-          meta: {
-            channel: "YouTube", // We could extract channel from video data if needed
-            duration: video.video_duration,
-            views: video.video_views,
-            likes: video.video_likes,
-            video_url: video.video_url
-          },
-          feedback: undefined as "accept" | "reject" | undefined
-        }));
-        
-        console.log("Created YouTube items:", youtubeItems);
-        setItems(youtubeItems);
+      // Handle the API response format - backend returns different arrays based on panel type
+      if (result.success) {
+        if (result.youtube && Array.isArray(result.youtube)) {
+          // Convert YouTube videos to panel items
+          const youtubeItems = result.youtube.map((video: any, index: number) => ({
+            id: `youtube-${index}-${Date.now()}`,
+            title: video.video_title,
+            meta: {
+              channel: "YouTube", // We could extract channel from video data if needed
+              duration: video.video_duration,
+              views: video.video_views,
+              likes: video.video_likes,
+              video_url: video.video_url
+            },
+            feedback: undefined as "accept" | "reject" | undefined
+          }));
+          
+          console.log("Created YouTube items:", youtubeItems);
+          setItems(youtubeItems);
+        } else if (result.papers && Array.isArray(result.papers)) {
+          // Convert papers to panel items
+          const paperItems = result.papers.map((paper: any, index: number) => ({
+            id: `paper-${index}-${Date.now()}`,
+            title: paper.title,
+            meta: {
+              venue: "ArXiv", // ArXiv is the source
+              year: new Date(paper.published).getFullYear(),
+              authors: paper.authors ? paper.authors.join(', ') : 'Unknown',
+              link: paper.link,
+              pdf_link: paper.pdf_link,
+              summary: paper.summary
+            },
+            feedback: undefined as "accept" | "reject" | undefined
+          }));
+          
+          console.log("Created paper items:", paperItems);
+          setItems(paperItems);
+        }
       }
     } 
     catch (e) {
@@ -160,6 +182,23 @@ export function Panel({
                     <div className="text-xs text-muted-foreground">
                       <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>
                     </div>
+                  </a>
+                ) : kind === "paper" && it.meta.link ? (
+                  <a 
+                    href={it.meta.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="block hover:opacity-80 transition-opacity"
+                  >
+                    <div className="font-medium leading-tight cursor-pointer hover:underline">{it.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      <span>{it.meta.venue} • {it.meta.year} • {it.meta.authors}</span>
+                    </div>
+                    {it.meta.summary && (
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {it.meta.summary}
+                      </div>
+                    )}
                   </a>
                 ) : (
                   <div>
