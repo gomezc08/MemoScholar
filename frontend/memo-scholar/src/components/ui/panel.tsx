@@ -176,7 +176,7 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline text-white">{it.title}</div>
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300">{it.title}</div>
                     <div className="text-xs text-zinc-400">
                       <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>
                     </div>
@@ -188,7 +188,7 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline text-white">{it.title}</div>
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300">{it.title}</div>
                     <div className="text-xs text-zinc-400">
                       <span>{it.meta.venue} • {it.meta.year} • {it.meta.authors}</span>
                     </div>
@@ -209,10 +209,10 @@ export function Panel({
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-zinc-400 hover:bg-zinc-700 hover:text-red-400">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:bg-zinc-700 hover:text-red-400">
                   <X className="h-10 w-10" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-zinc-400 hover:bg-zinc-700 hover:text-green-400">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:bg-zinc-700 hover:text-green-400">
                   <Check className="h-10 w-10" />
                 </Button>
               </div>

@@ -1,235 +1,46 @@
 import { useState } from "react";
-import { Download, Play } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Panel } from "@/components/ui/panel";
-import { HeaderBar } from "@/components/ui/header_bar";
-import { ManagementPanel } from "@/components/ui/management_panel";
-import { generateSubmission } from "@/lib/api";
+import Project from "./Project";
+import HomeScreen from "./HomeScreen";
 import type { Item } from "@/types";
 
 export default function App() {
-  const [topic, setTopic] = useState("");
-  const [objective, setObjective] = useState("");
-  const [guidelines, setGuidelines] = useState("");
-  const [isManagementOpen, setIsManagementOpen] = useState(false);
-  const [youtubeItems, setYoutubeItems] = useState<Item[]>([]);
-  const [paperItems, setPaperItems] = useState<Item[]>([]);
-  const [likedItems, setLikedItems] = useState<Item[]>([]);
-  const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [validationError, setValidationError] = useState<string>("");
+  const [hasRun, setHasRun] = useState(false);
+  const [projectData, setProjectData] = useState<{
+    topic: string;
+    objective: string;
+    guidelines: string;
+    youtubeItems: Item[];
+    paperItems: Item[];
+  } | null>(null);
 
-  const onSavePDF = () => window.print();
-  const onRun = async () => {
-    // Clear previous validation errors
-    setValidationError("");
-    
-    // Frontend validation
-    if (!topic.trim()) {
-      setValidationError("Topic is required");
-      return;
-    }
-    if (!objective.trim()) {
-      setValidationError("Objective is required");
-      return;
-    }
-    if (!guidelines.trim()) {
-      setValidationError("Guidelines are required");
-      return;
-    }
-
-    setIsGenerating(true);
-    console.log("Run button clicked!"); // Debug log
-    console.log("Payload:", { topic, objective, guidelines }); // Debug log
-    try { 
-      console.log("Calling generateSubmission API...");
-      const result = await generateSubmission(topic, objective, guidelines); 
-      console.log("Submission generated:", result);
-      console.log("YouTube array:", result.youtube);
-      console.log("Papers array:", result.papers); 
-      
-      // Handle the new API response format
-      if (result.success) {
-        // Handle YouTube videos
-        if (result.youtube && Array.isArray(result.youtube)) {
-          const youtubeItems = result.youtube.map((video: any, index: number) => ({
-            id: `youtube-${index}-${Date.now()}`,
-            title: video.video_title,
-            meta: {
-              channel: "YouTube", // We could extract channel from video data if needed
-              duration: video.video_duration,
-              views: video.video_views,
-              likes: video.video_likes,
-              video_url: video.video_url
-            },
-            feedback: undefined as "accept" | "reject" | undefined
-          }));
-          
-          console.log("Created YouTube items:", youtubeItems);
-          setYoutubeItems(youtubeItems);
-        }
-        
-        // Handle papers
-        if (result.papers && Array.isArray(result.papers)) {
-          const paperItems = result.papers.map((paper: any, index: number) => ({
-            id: `paper-${index}-${Date.now()}`,
-            title: paper.title,
-            meta: {
-              venue: "ArXiv", // ArXiv is the source
-              year: new Date(paper.published).getFullYear(),
-              authors: paper.authors ? paper.authors.join(', ') : 'Unknown',
-              link: paper.link,
-              pdf_link: paper.pdf_link,
-              summary: paper.summary
-            },
-            feedback: undefined as "accept" | "reject" | undefined
-          }));
-          
-          console.log("Created paper items:", paperItems);
-          setPaperItems(paperItems);
-        }
-      } else if (result.error) {
-        setValidationError(result.error);
-      }
-    }
-    catch (e) { 
-      console.error("Error generating submission:", e);
-      setValidationError("Failed to generate submission. Please try again.");
-    } finally {
-      setIsGenerating(false);
-    }
+  const handleProjectComplete = (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[]) => {
+    setProjectData({
+      topic,
+      objective,
+      guidelines,
+      youtubeItems,
+      paperItems
+    });
+    setHasRun(true);
   };
 
-  const handleItemFeedback = (item: Item, feedback: 'accept' | 'reject') => {
-    const updatedItem = { ...item, feedback };
-    
-    if (feedback === 'accept') {
-      // Remove from disliked if it exists there
-      setDislikedItems(prev => prev.filter(i => i.id !== item.id));
-      // Add to liked if not already there
-      setLikedItems(prev => {
-        const exists = prev.some(i => i.id === item.id);
-        return exists ? prev : [...prev, updatedItem];
-      });
-    } else {
-      // Remove from liked if it exists there
-      setLikedItems(prev => prev.filter(i => i.id !== item.id));
-      // Add to disliked if not already there
-      setDislikedItems(prev => {
-        const exists = prev.some(i => i.id === item.id);
-        return exists ? prev : [...prev, updatedItem];
-      });
-    }
+  const handleBackToSetup = () => {
+    setHasRun(false);
+    setProjectData(null);
   };
 
-  const handleRemoveItem = (id: string, type: 'liked' | 'disliked') => {
-    if (type === 'liked') {
-      setLikedItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setDislikedItems(prev => prev.filter(item => item.id !== id));
-    }
-  };
-
-  const handleMoveItem = (id: string, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => {
-    // Find the item to move
-    const sourceList = fromType === 'liked' ? likedItems : dislikedItems;
-    const item = sourceList.find(item => item.id === id);
-    
-    if (!item) return;
-
-    // Update the item's feedback status
-    const updatedItem = { ...item, feedback: toType === 'liked' ? 'accept' as const : 'reject' as const };
-
-    // Remove from source list
-    if (fromType === 'liked') {
-      setLikedItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setDislikedItems(prev => prev.filter(item => item.id !== id));
-    }
-
-    // Add to target list
-    if (toType === 'liked') {
-      setLikedItems(prev => [...prev, updatedItem]);
-    } else {
-      setDislikedItems(prev => [...prev, updatedItem]);
-    }
-  };
+  if (!hasRun || !projectData) {
+    return <Project onProjectComplete={handleProjectComplete} />;
+  }
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
-      <HeaderBar 
-        onManageClick={() => setIsManagementOpen(true)} 
-      />
-
-      <main className="flex-1 w-full px-4 py-6 space-y-6">
-        <Card className="bg-zinc-900/60 p-10 shadow-xl shadow-black border-zinc-800/50">
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-lg text-white">Project Details</CardTitle>
-            <Button onClick={onRun} variant="default" disabled={isGenerating}>
-              <Play className={`h-4 w-4 mr-1 ${isGenerating ? 'animate-spin' : ''}`} /> 
-              {isGenerating ? 'Generating...' : 'Run'}
-            </Button>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            {validationError && (
-              <div className="sm:col-span-2 p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-sm text-red-600">{validationError}</p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Topic</label>
-              <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Graph Neural Networks for Recommendation" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Primary Objective</label>
-              <Input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="e.g., build a GNN-based re-ranker" />
-            </div>
-            <div className="sm:col-span-2 space-y-2">
-              <label className="text-sm font-medium text-white">Guidelines</label>
-              <Textarea value={guidelines} onChange={(e) => setGuidelines(e.target.value)} placeholder="e.g., submission guidelines, formatting requirements, specific instructions" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-col min-[600px]:flex-row gap-4">
-          <div className="flex-1">
-            <Panel 
-              kind="youtube" 
-              topic={topic} 
-              objective={objective} 
-              guidelines={guidelines}
-              items={youtubeItems}
-              onItemFeedback={handleItemFeedback}
-            />
-          </div>
-          <div className="flex-1">
-            <Panel 
-              kind="paper" 
-              topic={topic} 
-              objective={objective} 
-              guidelines={guidelines}
-              items={paperItems}
-              onItemFeedback={handleItemFeedback}
-            />
-          </div>
-        </div>
-      </main>
-
-      <Button onClick={onSavePDF} className="fixed bottom-5 right-5 shadow-lg" size="lg">
-        <Download className="h-4 w-4 mr-2" /> Save as PDF
-      </Button>
-
-      <ManagementPanel
-        isOpen={isManagementOpen}
-        onClose={() => setIsManagementOpen(false)}
-        likedItems={likedItems}
-        dislikedItems={dislikedItems}
-        onRemoveItem={handleRemoveItem}
-        onMoveItem={handleMoveItem}
-      />
-    </div>
+    <HomeScreen
+      topic={projectData.topic}
+      objective={projectData.objective}
+      guidelines={projectData.guidelines}
+      youtubeItems={projectData.youtubeItems}
+      paperItems={projectData.paperItems}
+      onBackToSetup={handleBackToSetup}
+    />
   );
 }
