@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
 import { ManagementPanel } from "@/components/ui/management_panel";
-import { useTheme } from "@/hooks/useTheme";
 import { generateSubmission } from "@/lib/api";
 import type { Item } from "@/types";
 
@@ -22,7 +21,6 @@ export default function App() {
   const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
-  const { isDark, toggle } = useTheme();
 
   const onSavePDF = () => window.print();
   const onRun = async () => {
@@ -161,17 +159,15 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col ${isDark ? "dark bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
+    <div className="min-h-screen flex flex-col bg-black text-white">
       <HeaderBar 
-        isDark={isDark} 
-        onToggle={toggle} 
         onManageClick={() => setIsManagementOpen(true)} 
       />
 
       <main className="flex-1 w-full px-4 py-6 space-y-6">
-        <Card className="shadow-sm">
+        <Card className="bg-zinc-900/60 p-10 shadow-xl shadow-black border-zinc-800/50">
           <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-lg">Project Details</CardTitle>
+            <CardTitle className="text-lg text-white">Project Details</CardTitle>
             <Button onClick={onRun} variant="default" disabled={isGenerating}>
               <Play className={`h-4 w-4 mr-1 ${isGenerating ? 'animate-spin' : ''}`} /> 
               {isGenerating ? 'Generating...' : 'Run'}
@@ -184,15 +180,15 @@ export default function App() {
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Topic</label>
+              <label className="text-sm font-medium text-white">Topic</label>
               <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Graph Neural Networks for Recommendation" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Primary Objective</label>
+              <label className="text-sm font-medium text-white">Primary Objective</label>
               <Input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="e.g., build a GNN-based re-ranker" />
             </div>
             <div className="sm:col-span-2 space-y-2">
-              <label className="text-sm font-medium">Guidelines</label>
+              <label className="text-sm font-medium text-white">Guidelines</label>
               <Textarea value={guidelines} onChange={(e) => setGuidelines(e.target.value)} placeholder="e.g., submission guidelines, formatting requirements, specific instructions" />
             </div>
           </CardContent>
@@ -202,7 +198,6 @@ export default function App() {
           <div className="flex-1">
             <Panel 
               kind="youtube" 
-              accent="muted" 
               topic={topic} 
               objective={objective} 
               guidelines={guidelines}
@@ -213,7 +208,6 @@ export default function App() {
           <div className="flex-1">
             <Panel 
               kind="paper" 
-              accent="muted" 
               topic={topic} 
               objective={objective} 
               guidelines={guidelines}
@@ -231,7 +225,6 @@ export default function App() {
       <ManagementPanel
         isOpen={isManagementOpen}
         onClose={() => setIsManagementOpen(false)}
-        isDark={isDark}
         likedItems={likedItems}
         dislikedItems={dislikedItems}
         onRemoveItem={handleRemoveItem}

@@ -12,7 +12,6 @@ import { generateSubmissionIndividualPanel } from "@/lib/api";
 
 export function Panel({ 
   kind, 
-  accent = "muted", 
   topic = "", 
   objective = "", 
   guidelines = "",
@@ -20,7 +19,6 @@ export function Panel({
   onItemFeedback
 }: { 
   kind: PanelKind; 
-  accent?: string; 
   topic?: string; 
   objective?: string; 
   guidelines?: string;
@@ -129,10 +127,10 @@ export function Panel({
   }
 
   return (
-    <Card className={`relative border-${accent}`}>
+    <Card className="relative bg-zinc-900/60 p-10 shadow-xl shadow-black border-zinc-800/50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-lg">
+          <CardTitle className="flex items-center gap-2 text-lg text-white">
             {icon}
             {label}
           </CardTitle>
@@ -152,7 +150,7 @@ export function Panel({
         <Separator />
         <div className="grid grid-cols-1 gap-3">
           {items.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">
+            <div className="text-center text-zinc-400 py-8">
               No items yet. Click "Regenerate" to generate content for this panel.
             </div>
           ) : (
@@ -178,8 +176,8 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline">{it.title}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-white">{it.title}</div>
+                    <div className="text-xs text-zinc-400">
                       <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>
                     </div>
                   </a>
@@ -190,20 +188,20 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline">{it.title}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-white">{it.title}</div>
+                    <div className="text-xs text-zinc-400">
                       <span>{it.meta.venue} • {it.meta.year} • {it.meta.authors}</span>
                     </div>
                     {it.meta.summary && (
-                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      <div className="text-xs text-zinc-400 mt-1 line-clamp-2">
                         {it.meta.summary}
                       </div>
                     )}
                   </a>
                 ) : (
                   <div>
-                    <div className="font-medium leading-tight">{it.title}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-medium leading-tight text-white">{it.title}</div>
+                    <div className="text-xs text-zinc-400">
                       {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
                       {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
                     </div>
