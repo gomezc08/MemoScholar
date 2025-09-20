@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
@@ -26,8 +26,18 @@ export default function HomeScreen({
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [likedItems, setLikedItems] = useState<Item[]>([]);
   const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const onSavePDF = () => window.print();
+  
+  const handleBackToSetup = () => {
+    setShowConfirmDialog(true);
+  };
+  
+  const confirmBackToSetup = () => {
+    setShowConfirmDialog(false);
+    onBackToSetup();
+  };
 
   const handleItemFeedback = (item: Item, feedback: 'accept' | 'reject') => {
     const updatedItem = { ...item, feedback };
@@ -91,15 +101,28 @@ export default function HomeScreen({
       />
 
       <main className="flex-1 w-full px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold text-white mb-2">Project Results</h2>
-            <p className="text-zinc-400">Topic: {topic}</p>
-            <p className="text-zinc-400">Objective: {objective}</p>
+        <div className="relative">
+          <div className="bg-zinc-900/60 p-6 rounded-lg shadow-xl shadow-black border-zinc-800/50">
+            <div className="absolute top-4 right-4">
+              <Button onClick={handleBackToSetup} variant="outline" size="sm">
+                ← Back to Setup
+              </Button>
+            </div>
+            <div className="space-y-4 pr-24">
+              <div>
+                <label className="text-sm font-medium text-zinc-400">Topic</label>
+                <p className="text-white mt-1">{topic}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-zinc-400">Objective</label>
+                <p className="text-white mt-1">{objective}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-zinc-400">Guidelines</label>
+                <p className="text-white mt-1 whitespace-pre-wrap">{guidelines}</p>
+              </div>
+            </div>
           </div>
-          <Button onClick={onBackToSetup} variant="outline">
-            ← Back to Setup
-          </Button>
         </div>
 
         <div className="flex flex-col min-[600px]:flex-row gap-4">
@@ -138,6 +161,36 @@ export default function HomeScreen({
         onRemoveItem={handleRemoveItem}
         onMoveItem={handleMoveItem}
       />
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-zinc-900 p-6 rounded-lg shadow-xl border border-zinc-800 max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="h-6 w-6 text-pink-500" />
+              <h3 className="text-lg font-semibold text-white">Confirm Action</h3>
+            </div>
+            <p className="text-zinc-300 mb-6">
+              Are you sure you want to go back to setup? All your current work including liked/disliked items will be lost and you'll need to regenerate the content.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowConfirmDialog(false)}
+                className="hover:border-pink-500"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={confirmBackToSetup}
+                className="bg-pink-500 hover:bg-pink-600 hover:border-pink-500"
+              >
+                Yes, Go Back
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HeaderBar } from "@/components/ui/header_bar";
-import { ManagementPanel } from "@/components/ui/management_panel";
 import { generateSubmission } from "@/lib/api";
 import type { Item } from "@/types";
 
@@ -17,9 +15,6 @@ export default function Project({ onProjectComplete }: ProjectProps) {
   const [topic, setTopic] = useState("");
   const [objective, setObjective] = useState("");
   const [guidelines, setGuidelines] = useState("");
-  const [isManagementOpen, setIsManagementOpen] = useState(false);
-  const [likedItems, setLikedItems] = useState<Item[]>([]);
-  const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
 
@@ -133,108 +128,72 @@ export default function Project({ onProjectComplete }: ProjectProps) {
     }
   };
 
-  const handleItemFeedback = (item: Item, feedback: 'accept' | 'reject') => {
-    const updatedItem = { ...item, feedback };
-    
-    if (feedback === 'accept') {
-      // Remove from disliked if it exists there
-      setDislikedItems(prev => prev.filter(i => i.id !== item.id));
-      // Add to liked if not already there
-      setLikedItems(prev => {
-        const exists = prev.some(i => i.id === item.id);
-        return exists ? prev : [...prev, updatedItem];
-      });
-    } else {
-      // Remove from liked if it exists there
-      setLikedItems(prev => prev.filter(i => i.id !== item.id));
-      // Add to disliked if not already there
-      setDislikedItems(prev => {
-        const exists = prev.some(i => i.id === item.id);
-        return exists ? prev : [...prev, updatedItem];
-      });
-    }
-  };
-
-  const handleRemoveItem = (id: string, type: 'liked' | 'disliked') => {
-    if (type === 'liked') {
-      setLikedItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setDislikedItems(prev => prev.filter(item => item.id !== id));
-    }
-  };
-
-  const handleMoveItem = (id: string, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => {
-    // Find the item to move
-    const sourceList = fromType === 'liked' ? likedItems : dislikedItems;
-    const item = sourceList.find(item => item.id === id);
-    
-    if (!item) return;
-
-    // Update the item's feedback status
-    const updatedItem = { ...item, feedback: toType === 'liked' ? 'accept' as const : 'reject' as const };
-
-    // Remove from source list
-    if (fromType === 'liked') {
-      setLikedItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setDislikedItems(prev => prev.filter(item => item.id !== id));
-    }
-
-    // Add to target list
-    if (toType === 'liked') {
-      setLikedItems(prev => [...prev, updatedItem]);
-    } else {
-      setDislikedItems(prev => [...prev, updatedItem]);
-    }
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white">
-      <HeaderBar 
-        onManageClick={() => setIsManagementOpen(true)} 
-      />
+      <HeaderBar />
 
-      <main className="flex-1 w-full px-4 py-6 flex items-center justify-center">
-        <div className="w-full max-w-4xl">
-          <Card className="bg-zinc-900/60 p-10 shadow-xl shadow-black border-zinc-800/50">
-            <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg text-white">Project Details</CardTitle>
-              <Button onClick={onRun} variant="default" disabled={isGenerating}>
-                <Play className={`h-4 w-4 mr-1 ${isGenerating ? 'animate-spin' : ''}`} /> 
-                {isGenerating ? 'Generating...' : 'Run'}
+      <main className="flex-1 w-full px-8 py-12">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-white mb-4">Enter Your Project Details Below</h1>
+            <p className="text-xl text-zinc-400">Provide the information needed to generate your research content</p>
+          </div>
+
+          <div className="space-y-8">
+            {validationError && (
+              <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-lg">
+                <p className="text-red-400">{validationError}</p>
+              </div>
+            )}
+
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <label className="text-lg font-medium text-white">Topic</label>
+                <Input 
+                  value={topic} 
+                  onChange={(e) => setTopic(e.target.value)} 
+                  placeholder="e.g., Graph Neural Networks for Recommendation" 
+                  className="text-lg py-4"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-lg font-medium text-white">Primary Objective</label>
+                <Input 
+                  value={objective} 
+                  onChange={(e) => setObjective(e.target.value)} 
+                  placeholder="e.g., build a GNN-based re-ranker" 
+                  className="text-lg py-4"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-lg font-medium text-white">Guidelines</label>
+                <Textarea 
+                  value={guidelines} 
+                  onChange={(e) => setGuidelines(e.target.value)} 
+                  placeholder="e.g., submission guidelines, formatting requirements, specific instructions" 
+                  className="text-lg py-4 min-h-[120px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-center pt-8">
+              <Button 
+                onClick={onRun} 
+                variant="default" 
+                disabled={isGenerating}
+                size="lg"
+                className={`px-12 py-4 text-lg ${isGenerating ? "bg-pink-500 hover:bg-pink-600" : ""}`}
+              >
+                <Play className={`h-6 w-6 mr-2 ${isGenerating ? 'animate-spin' : ''}`} /> 
+                {isGenerating ? 'Generating...' : 'Generate Content'}
               </Button>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {validationError && (
-                <div className="sm:col-span-2 p-3 bg-red-50 border border-red-200 rounded-md">
-                  <p className="text-sm text-red-600">{validationError}</p>
-                </div>
-              )}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white">Topic</label>
-                <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Graph Neural Networks for Recommendation" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white">Primary Objective</label>
-                <Input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="e.g., build a GNN-based re-ranker" />
-              </div>
-              <div className="sm:col-span-2 space-y-2">
-                <label className="text-sm font-medium text-white">Guidelines</label>
-                <Textarea value={guidelines} onChange={(e) => setGuidelines(e.target.value)} placeholder="e.g., submission guidelines, formatting requirements, specific instructions" />
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </main>
-
-      <ManagementPanel
-        isOpen={isManagementOpen}
-        onClose={() => setIsManagementOpen(false)}
-        likedItems={likedItems}
-        dislikedItems={dislikedItems}
-        onRemoveItem={handleRemoveItem}
-        onMoveItem={handleMoveItem}
-      />
     </div>
   );
 }

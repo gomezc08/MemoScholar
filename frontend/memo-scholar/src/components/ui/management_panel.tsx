@@ -50,7 +50,7 @@ export function ManagementPanel({
               variant="ghost"
               size="sm"
               onClick={() => onMoveItem(item.id, type, type === 'liked' ? 'disliked' : 'liked')}
-              className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-500 transition-colors"
+              className="h-8 w-8 p-0 text-zinc-700 hover:text-blue-500 transition-colors rounded-full"
               title={`Move to ${type === 'liked' ? 'Disliked' : 'Liked'}`}
             >
               <ArrowRightLeft className="h-4 w-4" />
@@ -59,7 +59,7 @@ export function ManagementPanel({
               variant="ghost"
               size="sm"
               onClick={() => onRemoveItem(item.id, type)}
-              className="h-8 w-8 p-0 text-zinc-400 hover:text-destructive transition-colors"
+              className="h-8 w-8 p-0 text-zinc-700 hover:text-destructive transition-colors rounded-full"
               title="Remove item"
             >
               <Trash2 className="h-4 w-4" />
@@ -95,7 +95,7 @@ export function ManagementPanel({
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 rounded-full"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -105,18 +105,18 @@ export function ManagementPanel({
             <div className="flex mt-4 space-x-1">
               <Button
                 variant={activeTab === 'liked' ? 'default' : 'ghost'}
+                className={`flex-1 ${activeTab === 'liked' ? 'bg-zinc-700' : 'text-zinc-700 hover:bg-zinc-700'}`}
                 size="sm"
                 onClick={() => setActiveTab('liked')}
-                className="flex-1"
               >
                 <Heart className="h-4 w-4 mr-2" />
                 Liked ({likedItems.length})
               </Button>
               <Button
                 variant={activeTab === 'disliked' ? 'default' : 'ghost'}
+                className={`flex-1 ${activeTab === 'disliked' ? 'bg-zinc-700' : 'text-zinc-700 hover:bg-zinc-700'}`}
                 size="sm"
                 onClick={() => setActiveTab('disliked')}
-                className="flex-1"
               >
                 <ThumbsDown className="h-4 w-4 mr-2" />
                 Disliked ({dislikedItems.length})

@@ -134,7 +134,13 @@ export function Panel({
             {icon}
             {label}
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={regenerate} disabled={isRegenerating}>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={regenerate} 
+            disabled={isRegenerating}
+            className={isRegenerating ? "bg-pink-500 hover:bg-pink-600 border-pink-500" : ""}
+          >
             <RotateCcw className={`h-4 w-4 mr-1 ${isRegenerating ? 'animate-spin' : ''}`} /> 
             {isRegenerating ? 'Generating...' : 'Regenerate'}
           </Button>
@@ -209,10 +215,10 @@ export function Panel({
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:bg-zinc-700 hover:text-red-400">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "reject")} aria-label="Reject" className="h-12 w-12 text-red-500 hover:bg-zinc-700 hover:text-red-400 rounded-full">
                   <X className="h-10 w-10" />
                 </Button>
-                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:bg-zinc-700 hover:text-green-400">
+                <Button size="icon" variant="ghost" onClick={() => acceptOrRejectPanelItem(it.id, "accept")} aria-label="Accept" className="h-12 w-12 text-green-500 hover:bg-zinc-700 hover:text-green-400 rounded-full">
                   <Check className="h-10 w-10" />
                 </Button>
               </div>
