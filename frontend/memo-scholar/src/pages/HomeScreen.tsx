@@ -112,8 +112,8 @@ export default function HomeScreen({
             {/* Decorative border and title */}
             <div className="text-center mb-6 pr-24">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <span className="text-2xl">🧠</span>
-                <h1 className="text-xl font-bold text-white">{topic}</h1>
+                <span className="text-3xl">🧠</span>
+                <h1 className="text-3xl font-bold text-white">{topic}</h1>
               </div>
             </div>
 
@@ -122,15 +122,15 @@ export default function HomeScreen({
               <div className="flex items-start gap-3">
                 <span className="text-lg">🎯</span>
                 <div>
-                  <label className="text-sm font-medium text-zinc-400">Objective</label>
-                  <p className="text-white mt-1">{objective}</p>
+                  <h2 className="text-base font-semibold text-zinc-300 mb-2">Objective</h2>
+                  <p className="text-white">{objective}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="text-lg">📋</span>
                 <div>
-                  <label className="text-sm font-medium text-zinc-400">Guidelines</label>
-                  <p className="text-white mt-1 whitespace-pre-wrap">{guidelines}</p>
+                  <h2 className="text-base font-semibold text-zinc-300 mb-2">Guidelines</h2>
+                  <p className="text-white whitespace-pre-wrap">{guidelines}</p>
                 </div>
               </div>
             </div>
