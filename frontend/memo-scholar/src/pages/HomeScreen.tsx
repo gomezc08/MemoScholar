@@ -102,24 +102,36 @@ export default function HomeScreen({
 
       <main className="flex-1 w-full px-4 py-6 space-y-6">
         <div className="relative">
-          <div className="bg-zinc-900/60 p-6 rounded-lg shadow-xl shadow-black border-zinc-800/50">
+          <div className="p-6">
             <div className="absolute top-4 right-4">
               <Button onClick={handleBackToSetup} variant="outline" size="sm">
                 ← Back to Setup
               </Button>
             </div>
+            
+            {/* Decorative border and title */}
+            <div className="text-center mb-6 pr-24">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <span className="text-3xl">🧠</span>
+                <h1 className="text-3xl font-bold text-white">{topic}</h1>
+              </div>
+            </div>
+
+            {/* Project details with emojis */}
             <div className="space-y-4 pr-24">
-              <div>
-                <label className="text-sm font-medium text-zinc-400">Topic</label>
-                <p className="text-white mt-1">{topic}</p>
+              <div className="flex items-start gap-3">
+                <span className="text-lg">🎯</span>
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-300 mb-2">Objective</h2>
+                  <p className="text-white">{objective}</p>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-zinc-400">Objective</label>
-                <p className="text-white mt-1">{objective}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-zinc-400">Guidelines</label>
-                <p className="text-white mt-1 whitespace-pre-wrap">{guidelines}</p>
+              <div className="flex items-start gap-3">
+                <span className="text-lg">📋</span>
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-300 mb-2">Guidelines</h2>
+                  <p className="text-white whitespace-pre-wrap">{guidelines}</p>
+                </div>
               </div>
             </div>
           </div>
