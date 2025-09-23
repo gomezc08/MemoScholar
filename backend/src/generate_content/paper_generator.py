@@ -3,12 +3,14 @@ import urllib.request
 import json
 import xml.etree.ElementTree as ET
 from ..openai import openai_client
+from ..utils.logging_config import get_logger
 
 class PaperGenerator:
     def __init__(self):
         self.url = None
         self.model = "gpt-4o-mini"
         self.temperature = 0.0
+        self.logger = get_logger(__name__)
 
     def search_paper(self, query: str, max_results: int = 10):
         encoded_query = urllib.parse.quote(query)
@@ -68,11 +70,69 @@ class PaperGenerator:
             print(f"Error parsing ArXiv XML: {e}")
             return []
 
+    def _extract_json_from_content(self, content):
+        """
+        Extract valid JSON from content that may contain comments or extra text.
+        """
+        # Find the first '{' and the last '}' to extract the JSON object
+        start_idx = content.find('{')
+        if start_idx == -1:
+            return content
+        
+        # Find the matching closing brace by counting braces
+        brace_count = 0
+        end_idx = -1
+        
+        for i in range(start_idx, len(content)):
+            if content[i] == '{':
+                brace_count += 1
+            elif content[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i
+                    break
+        
+        if end_idx != -1:
+            json_content = content[start_idx:end_idx + 1]
+            # Remove any JavaScript-style comments (// comments)
+            lines = json_content.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                # Remove // comments but preserve // in strings
+                comment_pos = -1
+                in_string = False
+                escape_next = False
+                
+                for i, char in enumerate(line):
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    if char == '/' and i + 1 < len(line) and line[i + 1] == '/' and not in_string:
+                        comment_pos = i
+                        break
+                
+                if comment_pos != -1:
+                    line = line[:comment_pos]
+                
+                cleaned_lines.append(line)
+            
+            return '\n'.join(cleaned_lines)
+        
+        return content
+
     def generate_paper(self, data):
         # 1. Build search query from inputs
         query = f"{data['topic']}; {data['objective']}. "
         if "user_special_instructions" in data:
             query += f" IMPORTANT:{data['user_special_instructions']}"
+        
+        self.logger.info(f"Search query: {query}")
 
         # 2. Retrieve papers
         try:
@@ -84,8 +144,11 @@ class PaperGenerator:
             raw_papers = self.parse_arxiv_xml(raw_xml)
             if not raw_papers:
                 raise ValueError("No papers found in ArXiv response")
+            
+            self.logger.info(f"Successfully fetched {len(raw_papers)} papers from ArXiv")
                 
         except Exception as e:
+            self.logger.error(f"ArXiv API failed: {str(e)}")
             raise
 
         # 3. Single LLM call with real data
@@ -105,7 +168,8 @@ class PaperGenerator:
 
         IMPORTANT: Make sure to follow the special instructions carefully.
         
-        Return JSON in this format: {{"papers": [...]}}
+        Return ONLY valid JSON in this exact format (no comments, no explanations):
+        {{"papers": [...]}}
         """
         
         # 4. Single LLM call
@@ -115,12 +179,17 @@ class PaperGenerator:
                 model=self.model,
                 temperature=self.temperature
             )
+            self.logger.info(f"OpenAI API response success: {response.get('success', False)}")
+            self.logger.info(f"Response content length: {len(response.get('content', ''))} characters")
             
             # Parse the JSON content from the response
             content = response.get('content', '')
             if content.startswith('```json'):
                 # Remove markdown code block formatting
                 content = content.replace('```json', '').replace('```', '').strip()
+            
+            # Clean up the content to extract valid JSON
+            content = self._extract_json_from_content(content)
             
             try:
                 parsed_data = json.loads(content)
@@ -131,7 +200,10 @@ class PaperGenerator:
                     'success': True
                 }
             except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse JSON content: {str(e)}")
+                self.logger.error(f"Content: {content}")
                 raise ValueError(f"Invalid JSON response from OpenAI: {str(e)}")
                 
         except Exception as e:
+            self.logger.error(f"OpenAI API failed: {str(e)}")
             raise   
