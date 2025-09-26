@@ -5,6 +5,7 @@ import os
 class Connector:
     def __init__(self):
         self.cnx = None
+        self.cursor = None
     
     def open_connection(self):
         load_dotenv()
@@ -18,6 +19,7 @@ class Connector:
                 "raise_on_warnings": True
             }
             self.cnx = mysql.connector.connect(**config)
+            self.cursor = self.cnx.cursor()
             print("CONNECTED TO MYSQL")
             return None
 
@@ -26,6 +28,8 @@ class Connector:
             self.cnx = None
     
     def close_connection(self):
+        if self.cursor:
+            self.cursor.close()
         if self.cnx:
             self.cnx.close()
             print("CLOSED CONNECTION TO MYSQL")
