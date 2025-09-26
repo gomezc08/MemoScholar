@@ -8,7 +8,6 @@ class Connector:
     
     def open_connection(self):
         load_dotenv()
-        print("CONNECTING TO MYSQL")
         try:
             config = {
                 "user": os.getenv('USER'),
@@ -33,9 +32,7 @@ class Connector:
         else:
             print("NO CONNECTION TO MYSQL")
     
-
 if __name__ == '__main__':
     conn = Connector()
     conn.open_connection()
     conn.close_connection()
-            
