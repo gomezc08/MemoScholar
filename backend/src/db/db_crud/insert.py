@@ -10,7 +10,7 @@ class DBInsert:
     def __init__(self):
         self.connector = Connector()
 
-    def insert_project(self, topic, objective, guidelines):
+    def create_project(self, topic, objective, guidelines):
         self.connector.open_connection()
         try:
             query = "INSERT INTO Project (topic, objective, guidelines) VALUES (%s, %s, %s)"
@@ -25,9 +25,7 @@ class DBInsert:
         finally:
             self.connector.close_connection()
 
+# Kishan test (remove this once it works, Kishan)
 if __name__ == '__main__':
     db_insert = DBInsert()
-    db_insert.insert_project("Machine Learning in Healthcare", "Understand how machine learning algorithms are being applied to medical diagnosis, patient care, and drug discovery in the healthcare industry", "Focus on recent developments (2020-2024). Include both technical implementation details and real-world case studies")
-
-
-
+    db_insert.create_project("Machine Learning in Healthcare", "Understand how machine learning algorithms are being applied to medical diagnosis, patient care, and drug discovery in the healthcare industry", "Focus on recent developments (2020-2024). Include both technical implementation details and real-world case studies")
