@@ -5,6 +5,7 @@ import os
 from ..generate_content.youtube_generator import YoutubeGenerator
 from ..generate_content.paper_generator import PaperGenerator
 from ..utils.logging_config import get_logger
+from ..db.db_crud.insert import DBInsert
 
 # Add the parent directory to the path to import from openai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,6 +39,9 @@ def generate_submission():
         
         youtube_data = YoutubeGenerator().generate_youtube_videos(data)
         paper_data = PaperGenerator().generate_paper(data)
+        
+        DBInsert().create_project(data['topic'], data['objective'], data['guidelines'])
+        
         logger.info("SUCCESSFULLY RAN API CALL")
         
         return jsonify({
