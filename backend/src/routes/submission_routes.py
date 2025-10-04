@@ -49,12 +49,48 @@ def generate_submission():
                 'success': False
             }), 500
         
+        # Create query.
+        query_id = DBInsert().create_query(project_id, data['topic'] + ";" + data['objective'])
+        if query_id is None:
+            logger.error("Failed to create query")
+            return jsonify({
+                'error': 'Failed to create query',
+                'success': False
+            }), 500
+        
+        # Update youtube and paper tables.
+        # Handle YouTube videos - insert each video individually
+        youtube_videos = youtube_data.get('youtube', [])
+        for video in youtube_videos:
+            DBInsert().create_youtube(
+                project_id, 
+                query_id, 
+                video.get('video_title', ''), 
+                video.get('video_description', ''), 
+                video.get('video_duration', ''), 
+                video.get('video_url', ''), 
+                video.get('video_views', 0), 
+                video.get('video_likes', 0)
+            )
+        
+        # Handle papers - insert each paper individually
+        papers = paper_data.get('papers', [])
+        for paper in papers:
+            DBInsert().create_paper(
+                project_id, 
+                query_id, 
+                paper.get('title', ''), 
+                paper.get('summary', ''), 
+                paper.get('year', 2024), 
+                paper.get('pdf_link', '')
+            )
+        
         logger.info(f"SUCCESSFULLY RAN API CALL - Created project ID: {project_id}")
         
         return jsonify({
             'success': True,
-            **youtube_data,
-            **paper_data
+            'youtube': youtube_videos,
+            'papers': papers
         }), 200
     except Exception as e:
         logger.error(f"Exception in generate_submission: {str(e)}")

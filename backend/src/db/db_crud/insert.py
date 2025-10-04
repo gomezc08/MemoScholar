@@ -43,20 +43,23 @@ class DBInsert:
         finally:
             self.connector.close_connection()
 
-    def create_query(self, project_id, queries_text, special_instructions):
+    def create_query(self, project_id, queries_text, special_instructions=None):
         self.connector.open_connection()
         try:
             query = "INSERT INTO queries (project_id, queries_text, special_instructions) VALUES (%s, %s, %s)"
-            values = (project_id, queries_text, special_instructions)
+            values = (project_id, queries_text, special_instructions if special_instructions else None)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
+            # Return the query_id of the created query
+            return self.connector.cursor.lastrowid
         except Exception as e:
             print("create_query error:", e)
             self.connector.cnx.rollback()
+            return None
         finally:
             self.connector.close_connection()
 
-    def create_paper(self, project_id, paper_title, paper_summary, published_year, pdf_link, query_id=None):
+    def create_paper(self, project_id, query_id, paper_title, paper_summary, published_year, pdf_link):
         self.connector.open_connection()
         try:
             query = """
@@ -66,9 +69,12 @@ class DBInsert:
             values = (project_id, paper_title, paper_summary, published_year, pdf_link, query_id)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
+            # Return the paper_id of the created paper
+            return self.connector.cursor.lastrowid
         except Exception as e:
             print("create_paper error:", e)
             self.connector.cnx.rollback()
+            return None
         finally:
             self.connector.close_connection()
 
@@ -98,8 +104,8 @@ class DBInsert:
         finally:
             self.connector.close_connection()
 
-    def create_youtube(self, project_id, video_title, video_description, video_duration, video_url,
-                       video_views=0, video_likes=0, query_id=None):
+    def create_youtube(self, project_id, query_id, video_title, video_description, video_duration, video_url,
+                       video_views=0, video_likes=0):
         self.connector.open_connection()
         try:
             query = """
@@ -112,9 +118,12 @@ class DBInsert:
                       video_duration, video_url, video_views, video_likes)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
+            # Return the youtube_id of the created youtube
+            return self.connector.cursor.lastrowid
         except Exception as e:
             print("create_youtube error:", e)
             self.connector.cnx.rollback()
+            return None
         finally:
             self.connector.close_connection()
 
@@ -141,9 +150,12 @@ class DBInsert:
             values = (project_id, target_type, target_id, isLiked)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
+            # Return the like_id of the created like
+            return self.connector.cursor.lastrowid
         except Exception as e:
             print("create_like error:", e)
             self.connector.cnx.rollback()
+            return None
         finally:
             self.connector.close_connection()
 
