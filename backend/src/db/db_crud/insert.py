@@ -145,11 +145,9 @@ class DBInsert:
 if __name__ == '__main__':
     db_insert = DBInsert()
 
-    # 1) Create a user
     print("Inserting user...")
     db_insert.create_user("Chris Gomez", "chris@example.com")
 
-    # 2) Create a project (requires user_id)
     print("Inserting project...")
     db_insert.create_project(
         user_id=1,   # assumes the new user got user_id=1
@@ -158,7 +156,6 @@ if __name__ == '__main__':
         guidelines="Focus on 2020-2024; include technical details and case studies"
     )
 
-    # 3) Create a query
     print("Inserting query...")
     db_insert.create_query(
         project_id=1,
@@ -166,7 +163,6 @@ if __name__ == '__main__':
         special_instructions="Prefer peer-reviewed, exclude preprints"
     )
 
-    # 4) Create a paper
     print("Inserting paper...")
     db_insert.create_paper(
         project_id=1,
@@ -177,15 +173,12 @@ if __name__ == '__main__':
         query_id=1
     )
 
-    # 5) Create an author
     print("Inserting author...")
     db_insert.create_author("Jane Doe")
 
-    # 6) Link paper and author
     print("Linking paper and author...")
     db_insert.add_paper_author(paper_id=1, author_id=1)
 
-    # 7) Create a YouTube record
     print("Inserting youtube...")
     db_insert.create_youtube(
         project_id=1,
@@ -198,7 +191,6 @@ if __name__ == '__main__':
         query_id=1
     )
 
-    # 8) Add likes
     print("Inserting likes...")
     db_insert.create_like(project_id=1, target_type="paper", target_id=1, isLiked=True)
     db_insert.create_like(project_id=1, target_type="youtube", target_id=1, isLiked=False)
