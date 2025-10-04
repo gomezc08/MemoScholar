@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { mockItems } from "@/lib/mock";
 import type { Item, PanelKind } from "@/types";
-import { acceptOrReject } from "@/lib/api";
+import { acceptOrReject, updateLikeStatus } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
 import { formatNumber, formatDuration } from "@/lib/dataTransformers";
 
@@ -122,22 +122,50 @@ export function Panel({
     // Update UI state immediately for visual feedback
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
     
-    // Call the parent callback to manage liked/disliked items
-    if (onItemFeedback) {
-      onItemFeedback(item, label);
-    }
-    
     try{
-      const payload = {
-        project_id: item.project_id,
-        target_type: item.target_type,
-        target_id: item.database_id,
-        isLiked: label === "accept"
-      };
-      
-      console.log("Calling acceptOrReject API with payload:", payload);
-      const result = await acceptOrReject(payload);
-      console.log("Submission accepted or rejected:", result); 
+      // Check if this item already has a like record (for updates)
+      if (item.liked_disliked_id) {
+        // Update existing like/dislike record
+        const payload = {
+          liked_disliked_id: item.liked_disliked_id
+        };
+        
+        console.log("Calling updateLikeStatus API with payload:", payload);
+        const result = await updateLikeStatus(payload);
+        console.log("Like updated:", result);
+        
+        // Update the item with the new like ID if returned
+        if (result.liked_disliked_id) {
+          setItems(prev => prev.map(it => 
+            it.id === id ? { ...it, liked_disliked_id: result.liked_disliked_id } : it
+          ));
+        }
+      } else {
+        // Create new like/dislike record
+        const payload = {
+          project_id: item.project_id,
+          target_type: item.target_type,
+          target_id: item.database_id,
+          isLiked: label === "accept"
+        };
+        
+        console.log("Calling acceptOrReject API with payload:", payload);
+        const result = await acceptOrReject(payload);
+        console.log("Submission accepted or rejected:", result);
+        
+        // Update the item with the new like ID
+        if (result.like_id) {
+          const updatedItem = { ...item, liked_disliked_id: result.like_id, feedback: label };
+          setItems(prev => prev.map(it => 
+            it.id === id ? updatedItem : it
+          ));
+          
+          // Call the parent callback with the updated item (now has liked_disliked_id)
+          if (onItemFeedback) {
+            onItemFeedback(updatedItem, label);
+          }
+        }
+      }
       
       // Remove item after successful API call with delay for dissolve effect
       setTimeout(() => setItems(prev => prev.filter(it => it.id !== id)), 800);

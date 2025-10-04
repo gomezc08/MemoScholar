@@ -7,6 +7,7 @@ export interface Item {
   database_id?: number; // The actual database ID (youtube_id or paper_id)
   target_type?: "youtube" | "paper"; // The type for database operations
   project_id?: number; // The project this item belongs to
+  liked_disliked_id?: number; // The like record ID for updates
   meta: {
     channel?: string;
     duration?: string;

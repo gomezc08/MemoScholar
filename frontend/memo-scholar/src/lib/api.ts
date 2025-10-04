@@ -37,6 +37,18 @@ export async function acceptOrReject(payload: {
   return res.json();
 }
 
+export async function updateLikeStatus(payload: { 
+  liked_disliked_id: number;
+}) {
+  const res = await fetch("/api/accept_or_reject/update/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Update like failed");
+  return res.json();
+}
+
 // New API functions to work with database data
 export async function getProject(projectId: number): Promise<DatabaseProject> {
   const res = await fetch(`/api/projects/${projectId}`, {
