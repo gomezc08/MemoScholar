@@ -20,3 +20,10 @@ export interface Item {
   };
   feedback?: "accept" | "reject";
 }
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  picture?: string;
+}

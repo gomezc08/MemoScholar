@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
 import { ManagementPanel } from "@/components/ui/management_panel";
-import type { Item } from "@/types";
+import SimpleLogin from "@/components/ui/simple-login";
+import type { Item, UserProfile } from "@/types";
 
 interface HomeScreenProps {
   topic: string;
@@ -13,6 +14,9 @@ interface HomeScreenProps {
   youtubeItems: Item[];
   paperItems: Item[];
   onBackToSetup: () => void;
+  user: UserProfile | null;
+  onUserLogin: (user: UserProfile) => void;
+  onUserLogout: () => void;
 }
 
 export default function HomeScreen({ 
@@ -21,7 +25,10 @@ export default function HomeScreen({
   guidelines, 
   youtubeItems, 
   paperItems, 
-  onBackToSetup 
+  onBackToSetup,
+  user,
+  onUserLogin,
+  onUserLogout
 }: HomeScreenProps) {
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [likedItems, setLikedItems] = useState<Item[]>([]);
@@ -99,6 +106,25 @@ export default function HomeScreen({
       <HeaderBar 
         onManageClick={() => setIsManagementOpen(true)} 
       />
+      
+      {/* Simple Login Section */}
+      <div className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-zinc-400">Welcome to MemoScholar</span>
+            {user && (
+              <span className="text-sm text-pink-400">
+                • Signed in as {user.name}
+              </span>
+            )}
+          </div>
+          <SimpleLogin 
+            onLogin={onUserLogin}
+            onLogout={onUserLogout}
+            user={user}
+          />
+        </div>
+      </div>
 
       <main className="flex-1 w-full px-4 py-6 space-y-6">
         <div className="relative">

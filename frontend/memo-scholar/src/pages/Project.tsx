@@ -4,14 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HeaderBar } from "@/components/ui/header_bar";
+import SimpleLogin from "@/components/ui/simple-login";
 import { generateSubmission } from "@/lib/api";
-import type { Item } from "@/types";
+import type { Item, UserProfile } from "@/types";
 
 interface ProjectProps {
   onProjectComplete: (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[]) => void;
+  user: UserProfile | null;
+  onUserLogin: (user: UserProfile) => void;
+  onUserLogout: () => void;
 }
 
-export default function Project({ onProjectComplete }: ProjectProps) {
+export default function Project({ onProjectComplete, user, onUserLogin, onUserLogout }: ProjectProps) {
   const [topic, setTopic] = useState("");
   const [objective, setObjective] = useState("");
   const [guidelines, setGuidelines] = useState("");
@@ -132,6 +136,25 @@ export default function Project({ onProjectComplete }: ProjectProps) {
   return (
     <div className="min-h-screen flex flex-col bg-black text-white">
       <HeaderBar />
+      
+      {/* Simple Login Section */}
+      <div className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-zinc-400">Welcome to MemoScholar</span>
+            {user && (
+              <span className="text-sm text-pink-400">
+                • Signed in as {user.name}
+              </span>
+            )}
+          </div>
+          <SimpleLogin 
+            onLogin={onUserLogin}
+            onLogout={onUserLogout}
+            user={user}
+          />
+        </div>
+      </div>
 
       <main className="flex-1 w-full px-8 py-12">
         <div className="max-w-4xl mx-auto">
