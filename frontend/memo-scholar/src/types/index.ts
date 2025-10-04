@@ -26,6 +26,7 @@ export interface UserProfile {
   name: string;
   email: string;
   picture?: string;
+  user_id?: number; // Database user_id for backend operations
 }
 
 // New interfaces to match database structure

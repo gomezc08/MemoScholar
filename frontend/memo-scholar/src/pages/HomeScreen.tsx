@@ -68,7 +68,7 @@ export default function HomeScreen({
     }
   };
 
-  const handleRemoveItem = (id: string, type: 'liked' | 'disliked') => {
+  const handleRemoveItem = (id: number, type: 'liked' | 'disliked') => {
     if (type === 'liked') {
       setLikedItems(prev => prev.filter(item => item.id !== id));
     } else {
@@ -76,7 +76,7 @@ export default function HomeScreen({
     }
   };
 
-  const handleMoveItem = (id: string, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => {
+  const handleMoveItem = (id: number, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => {
     // Find the item to move
     const sourceList = fromType === 'liked' ? likedItems : dislikedItems;
     const item = sourceList.find(item => item.id === id);
@@ -172,6 +172,7 @@ export default function HomeScreen({
               guidelines={guidelines}
               items={youtubeItems}
               onItemFeedback={handleItemFeedback}
+              user={user}
             />
           </div>
           <div className="flex-1">
@@ -182,6 +183,7 @@ export default function HomeScreen({
               guidelines={guidelines}
               items={paperItems}
               onItemFeedback={handleItemFeedback}
+              user={user}
             />
           </div>
         </div>

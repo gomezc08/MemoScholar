@@ -17,9 +17,12 @@ class DBInsert:
             values = (name, email)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
+            # Return the user_id of the created user
+            return self.connector.cursor.lastrowid
         except Exception as e:
             print("create_user error:", e)
             self.connector.cnx.rollback()
+            return None
         finally:
             self.connector.close_connection()
 
@@ -31,9 +34,12 @@ class DBInsert:
             values = (user_id, topic, objective, guidelines)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
+            # Return the project_id of the created project
+            return self.connector.cursor.lastrowid
         except Exception as e:
             print("create_project error:", e)
             self.connector.cnx.rollback()
+            return None
         finally:
             self.connector.close_connection()
 

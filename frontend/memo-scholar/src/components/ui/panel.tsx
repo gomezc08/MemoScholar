@@ -17,7 +17,8 @@ export function Panel({
   objective = "", 
   guidelines = "",
   items: externalItems,
-  onItemFeedback
+  onItemFeedback,
+  user
 }: { 
   kind: PanelKind; 
   topic?: string; 
@@ -25,6 +26,7 @@ export function Panel({
   guidelines?: string;
   items?: Item[];
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
+  user?: { user_id?: number } | null;
 }) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => externalItems || (kind === "model" ? mockItems(kind) : []));
@@ -45,10 +47,15 @@ export function Panel({
   const label = kind === "youtube" ? "YouTube" : kind === "paper" ? "Papers" : "Models";
 
   const regenerate = async () => {
+    if (!user?.user_id) {
+      alert('Please sign in to generate content');
+      return;
+    }
+    
     setIsRegenerating(true);
     try{
-      console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
-      const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label);
+      console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions, user_id: user.user_id });
+      const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label, user.user_id);
       console.log("Submission generated:", result);
       console.log("YouTube array:", result.youtube);
       console.log("Papers array:", result.papers); 
@@ -139,11 +146,11 @@ export function Panel({
             size="sm" 
             variant="outline" 
             onClick={regenerate} 
-            disabled={isRegenerating}
+            disabled={isRegenerating || !user?.user_id}
             className={isRegenerating ? "bg-pink-500 hover:bg-pink-600 border-pink-500" : ""}
           >
             <RotateCcw className={`h-4 w-4 mr-1 ${isRegenerating ? 'animate-spin' : ''}`} /> 
-            {isRegenerating ? 'Generating...' : 'Regenerate'}
+            {isRegenerating ? 'Generating...' : !user?.user_id ? 'Sign in to generate' : 'Regenerate'}
           </Button>
         </div>
       </CardHeader>

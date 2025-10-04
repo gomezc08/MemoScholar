@@ -26,6 +26,12 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
     // Clear previous validation errors
     setValidationError("");
     
+    // Check if user is logged in
+    if (!user?.user_id) {
+      setValidationError("Please sign in to generate content");
+      return;
+    }
+    
     // Frontend validation
     if (!topic.trim()) {
       setValidationError("Topic is required");
@@ -42,10 +48,10 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
 
     setIsGenerating(true);
     console.log("Run button clicked!"); // Debug log
-    console.log("Payload:", { topic, objective, guidelines }); // Debug log
+    console.log("Payload:", { topic, objective, guidelines, user_id: user.user_id }); // Debug log
     try { 
       console.log("Calling generateSubmission API...");
-      const result = await generateSubmission(topic, objective, guidelines); 
+      const result = await generateSubmission(topic, objective, guidelines, user.user_id); 
       console.log("Submission generated:", result);
       console.log("YouTube array:", result.youtube);
       console.log("Papers array:", result.papers); 
@@ -206,12 +212,12 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
               <Button 
                 onClick={onRun} 
                 variant="default" 
-                disabled={isGenerating}
+                disabled={isGenerating || !user?.user_id}
                 size="lg"
                 className={`px-12 py-4 text-lg ${isGenerating ? "bg-pink-500 hover:bg-pink-600" : ""}`}
               >
                 <Play className={`h-6 w-6 mr-2 ${isGenerating ? 'animate-spin' : ''}`} /> 
-                {isGenerating ? 'Generating...' : 'Generate Content'}
+                {isGenerating ? 'Generating...' : !user?.user_id ? 'Sign in to generate' : 'Generate Content'}
               </Button>
             </div>
           </div>

@@ -28,9 +28,9 @@ def generate_submission():
         
         # Validate required fields
         logger.info(f"DATA: {data}")
-        required_fields = ['topic', 'objective', 'guidelines']
+        required_fields = ['topic', 'objective', 'guidelines', 'user_id']
         for field in required_fields:
-            if field not in data or not data[field] or data[field].strip() == '':
+            if field not in data or not data[field] or (isinstance(data[field], str) and data[field].strip() == ''):
                 logger.warning(f"Missing or empty required field: {field}")
                 return jsonify({
                     'error': f'Missing or empty required field: {field}',
@@ -40,9 +40,16 @@ def generate_submission():
         youtube_data = YoutubeGenerator().generate_youtube_videos(data)
         paper_data = PaperGenerator().generate_paper(data)
         
-        # DBInsert().create_project(data['topic'], data['objective'], data['guidelines'])
+        # Create project and check if it was successful
+        project_id = DBInsert().create_project(data['user_id'], data['topic'], data['objective'], data['guidelines'])
+        if project_id is None:
+            logger.error("Failed to create project")
+            return jsonify({
+                'error': 'Failed to create project',
+                'success': False
+            }), 500
         
-        logger.info("SUCCESSFULLY RAN API CALL")
+        logger.info(f"SUCCESSFULLY RAN API CALL - Created project ID: {project_id}")
         
         return jsonify({
             'success': True,
@@ -65,16 +72,28 @@ def generate_submission_individual_panel():
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['topic', 'objective', 'guidelines', 'user_special_instructions', 'panel_name']
+        required_fields = ['topic', 'objective', 'guidelines', 'user_special_instructions', 'panel_name', 'user_id']
         for field in required_fields:
-            if field not in data or not data[field] or data[field].strip() == '':
+            if field not in data or not data[field] or (isinstance(data[field], str) and data[field].strip() == ''):
                 return jsonify({
                     'error': f'Missing or empty required field: {field}',
                     'success': False
                 }), 400
         
+        # Create project first (this will be idempotent if project already exists)
+        db_insert = DBInsert()
+        
         if data['panel_name'] == 'Papers':
             paper_data = PaperGenerator().generate_paper(data)
+            
+            # Create project with user_id
+            db_insert.create_project(
+                user_id=data['user_id'],
+                topic=data['topic'],
+                objective=data['objective'],
+                guidelines=data['guidelines']
+            )
+            
             return jsonify({
                 'success': True,
                 'panel_name': data['panel_name'],
@@ -82,6 +101,15 @@ def generate_submission_individual_panel():
             }), 200
         elif data['panel_name'] == 'YouTube':
             youtube_data = YoutubeGenerator().generate_youtube_videos(data)
+            
+            # Create project with user_id
+            db_insert.create_project(
+                user_id=data['user_id'],
+                topic=data['topic'],
+                objective=data['objective'],
+                guidelines=data['guidelines']
+            )
+            
             return jsonify({
                 'success': True,
                 'panel_name': data['panel_name'],
