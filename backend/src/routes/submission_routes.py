@@ -40,7 +40,7 @@ def generate_submission():
         youtube_data = YoutubeGenerator().generate_youtube_videos(data)
         paper_data = PaperGenerator().generate_paper(data)
         
-        DBInsert().create_project(data['topic'], data['objective'], data['guidelines'])
+        # DBInsert().create_project(data['topic'], data['objective'], data['guidelines'])
         
         logger.info("SUCCESSFULLY RAN API CALL")
         
