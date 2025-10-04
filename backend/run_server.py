@@ -15,6 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 # Import blueprints
 from src.routes.submission_routes import submission_bp
 from src.routes.accept_or_reject_routes import accept_or_reject_bp
+from src.routes.user_routes import user_bp
 
 def create_app():
     """Create and configure the Flask application."""
@@ -23,6 +24,7 @@ def create_app():
     # Register blueprints
     app.register_blueprint(submission_bp)
     app.register_blueprint(accept_or_reject_bp)
+    app.register_blueprint(user_bp)
     
     # Add a root endpoint
     @app.route('/', methods=['GET'])
@@ -38,6 +40,10 @@ def create_app():
                 },
                 'accept_reject': {
                     'POST /accept_or_reject/': 'Accept or reject submission'
+                },
+                'user': {
+                    'POST /api/users/': 'Create or get user',
+                    'GET /api/users/<user_id>': 'Get user by ID'
                 },
             }
         })

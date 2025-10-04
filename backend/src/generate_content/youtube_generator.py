@@ -1,6 +1,7 @@
 import json
 import os
 import requests
+import re
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
 
@@ -12,6 +13,45 @@ class YoutubeGenerator:
         self.model = "gpt-4o-mini"
         self.temperature = 0.0
         self.logger = get_logger(__name__)
+
+    def parse_iso8601_duration(self, duration_str):
+        """
+        Convert ISO 8601 duration format (PT11M12S) to HH:MM:SS format.
+        
+        Examples:
+        - PT11M12S -> 00:11:12
+        - PT1H30M45S -> 01:30:45
+        - PT45S -> 00:00:45
+        - PT2H -> 02:00:00
+        """
+        if not duration_str or not duration_str.startswith('PT'):
+            return "00:00:00"
+        
+        # Remove 'PT' prefix
+        duration = duration_str[2:]
+        
+        # Initialize hours, minutes, seconds
+        hours = 0
+        minutes = 0
+        seconds = 0
+        
+        # Parse hours (H)
+        hour_match = re.search(r'(\d+)H', duration)
+        if hour_match:
+            hours = int(hour_match.group(1))
+        
+        # Parse minutes (M)
+        minute_match = re.search(r'(\d+)M', duration)
+        if minute_match:
+            minutes = int(minute_match.group(1))
+        
+        # Parse seconds (S)
+        second_match = re.search(r'(\d+)S', duration)
+        if second_match:
+            seconds = int(second_match.group(1))
+        
+        # Format as HH:MM:SS
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def search_youtube_videos(self, query: str, max_results: int = 10):
         api_key = os.getenv("YOUTUBE_API_KEY")
@@ -49,10 +89,15 @@ class YoutubeGenerator:
                 snippet = v.get("snippet", {})
                 stats = v.get("statistics", {})
                 content = v.get("contentDetails", {})
+                
+                # Parse duration from ISO 8601 to HH:MM:SS format
+                raw_duration = content.get("duration", "")
+                parsed_duration = self.parse_iso8601_duration(raw_duration)
+                
                 results.append({
                     "video_title": snippet.get("title"),
                     "video_description": snippet.get("description"),
-                    "video_duration": content.get("duration"),   # ISO8601 e.g. PT14M
+                    "video_duration": parsed_duration,   # Now in HH:MM:SS format
                     "video_views": stats.get("viewCount"),
                     "video_likes": stats.get("likeCount"),
                     "video_url": f"https://www.youtube.com/watch?v={v.get('id')}"

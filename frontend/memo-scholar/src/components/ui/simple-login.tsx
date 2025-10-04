@@ -3,6 +3,7 @@ import { Button } from './button';
 import { Input } from './input';
 import { LogOut, Mail, User } from 'lucide-react';
 import type { UserProfile } from '@/types';
+import { createUser } from '@/lib/api';
 
 interface SimpleLoginProps {
   onLogin: (user: UserProfile) => void;
@@ -16,7 +17,7 @@ export default function SimpleLogin({ onLogin, onLogout, user }: SimpleLoginProp
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!name.trim() || !email.trim()) {
@@ -32,21 +33,32 @@ export default function SimpleLogin({ onLogin, onLogout, user }: SimpleLoginProp
 
     setIsLoading(true);
     
-    // Simulate a brief loading state
-    setTimeout(() => {
-      const userProfile: UserProfile = {
-        id: `user_${Date.now()}`,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name.trim())}&background=random&color=fff&size=32`
-      };
+    try {
+      // Call the backend to create/get user
+      const result = await createUser(name.trim(), email.trim().toLowerCase());
       
-      onLogin(userProfile);
-      setIsLoginOpen(false);
-      setName('');
-      setEmail('');
+      if (result.success) {
+        const userProfile: UserProfile = {
+          id: Date.now(), // Keep the old id for UI compatibility
+          name: result.name,
+          email: result.email,
+          user_id: result.user_id, // Store the database user_id
+          picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(result.name)}&background=random&color=fff&size=32`
+        };
+        
+        onLogin(userProfile);
+        setIsLoginOpen(false);
+        setName('');
+        setEmail('');
+      } else {
+        alert('Failed to create user account. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Failed to sign in. Please check your connection and try again.');
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
   const handleLogout = () => {

@@ -3,6 +3,11 @@ export type PanelKind = "youtube" | "paper" | "model";
 export interface Item {
   id: number;  
   title: string;
+  // Database IDs needed for like/dislike functionality
+  database_id?: number; // The actual database ID (youtube_id or paper_id)
+  target_type?: "youtube" | "paper"; // The type for database operations
+  project_id?: number; // The project this item belongs to
+  liked_disliked_id?: number; // The like record ID for updates
   meta: {
     channel?: string;
     duration?: string;
@@ -26,6 +31,7 @@ export interface UserProfile {
   name: string;
   email: string;
   picture?: string;
+  user_id?: number; // Database user_id for backend operations
 }
 
 // New interfaces to match database structure

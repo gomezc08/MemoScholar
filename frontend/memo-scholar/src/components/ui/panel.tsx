@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { mockItems } from "@/lib/mock";
 import type { Item, PanelKind } from "@/types";
-import { acceptOrReject } from "@/lib/api";
+import { acceptOrReject, updateLikeStatus } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
 import { formatNumber, formatDuration } from "@/lib/dataTransformers";
 
@@ -17,7 +17,8 @@ export function Panel({
   objective = "", 
   guidelines = "",
   items: externalItems,
-  onItemFeedback
+  onItemFeedback,
+  user
 }: { 
   kind: PanelKind; 
   topic?: string; 
@@ -25,6 +26,7 @@ export function Panel({
   guidelines?: string;
   items?: Item[];
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
+  user?: { user_id?: number } | null;
 }) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => externalItems || (kind === "model" ? mockItems(kind) : []));
@@ -45,10 +47,15 @@ export function Panel({
   const label = kind === "youtube" ? "YouTube" : kind === "paper" ? "Papers" : "Models";
 
   const regenerate = async () => {
+    if (!user?.user_id) {
+      alert('Please sign in to generate content');
+      return;
+    }
+    
     setIsRegenerating(true);
     try{
-      console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions });
-      const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label);
+      console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions, user_id: user.user_id });
+      const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label, user.user_id);
       console.log("Submission generated:", result);
       console.log("YouTube array:", result.youtube);
       console.log("Papers array:", result.papers); 
@@ -104,18 +111,61 @@ export function Panel({
     const item = items.find(it => it.id === id);
     if (!item) return;
 
+    // Check if we have the required database information
+    if (!item.database_id || !item.target_type || !item.project_id) {
+      console.error("Missing database information for item:", item);
+      console.error("Available properties:", Object.keys(item));
+      alert("This item is missing database information. Please regenerate the content to fix this issue.");
+      return;
+    }
+
     // Update UI state immediately for visual feedback
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
     
-    // Call the parent callback to manage liked/disliked items
-    if (onItemFeedback) {
-      onItemFeedback(item, label);
-    }
-    
     try{
-      console.log("Calling acceptOrReject API on the following data:", { panel_name: label, panel_name_content_id: id.toString() });
-      const result = await acceptOrReject({ panel_name: label, panel_name_content_id: id.toString() });
-      console.log("Submission accepted or rejected:", result); 
+      // Check if this item already has a like record (for updates)
+      if (item.liked_disliked_id) {
+        // Update existing like/dislike record
+        const payload = {
+          liked_disliked_id: item.liked_disliked_id
+        };
+        
+        console.log("Calling updateLikeStatus API with payload:", payload);
+        const result = await updateLikeStatus(payload);
+        console.log("Like updated:", result);
+        
+        // Update the item with the new like ID if returned
+        if (result.liked_disliked_id) {
+          setItems(prev => prev.map(it => 
+            it.id === id ? { ...it, liked_disliked_id: result.liked_disliked_id } : it
+          ));
+        }
+      } else {
+        // Create new like/dislike record
+        const payload = {
+          project_id: item.project_id,
+          target_type: item.target_type,
+          target_id: item.database_id,
+          isLiked: label === "accept"
+        };
+        
+        console.log("Calling acceptOrReject API with payload:", payload);
+        const result = await acceptOrReject(payload);
+        console.log("Submission accepted or rejected:", result);
+        
+        // Update the item with the new like ID
+        if (result.like_id) {
+          const updatedItem = { ...item, liked_disliked_id: result.like_id, feedback: label };
+          setItems(prev => prev.map(it => 
+            it.id === id ? updatedItem : it
+          ));
+          
+          // Call the parent callback with the updated item (now has liked_disliked_id)
+          if (onItemFeedback) {
+            onItemFeedback(updatedItem, label);
+          }
+        }
+      }
       
       // Remove item after successful API call with delay for dissolve effect
       setTimeout(() => setItems(prev => prev.filter(it => it.id !== id)), 800);
@@ -139,11 +189,11 @@ export function Panel({
             size="sm" 
             variant="outline" 
             onClick={regenerate} 
-            disabled={isRegenerating}
+            disabled={isRegenerating || !user?.user_id}
             className={isRegenerating ? "bg-pink-500 hover:bg-pink-600 border-pink-500" : ""}
           >
             <RotateCcw className={`h-4 w-4 mr-1 ${isRegenerating ? 'animate-spin' : ''}`} /> 
-            {isRegenerating ? 'Generating...' : 'Regenerate'}
+            {isRegenerating ? 'Generating...' : !user?.user_id ? 'Sign in to generate' : 'Regenerate'}
           </Button>
         </div>
       </CardHeader>

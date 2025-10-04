@@ -5,6 +5,7 @@ import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
 import { ManagementPanel } from "@/components/ui/management_panel";
 import SimpleLogin from "@/components/ui/simple-login";
+import { updateLikeStatus } from "@/lib/api";
 import type { Item, UserProfile } from "@/types";
 
 interface HomeScreenProps {
@@ -68,7 +69,7 @@ export default function HomeScreen({
     }
   };
 
-  const handleRemoveItem = (id: string, type: 'liked' | 'disliked') => {
+  const handleRemoveItem = (id: number, type: 'liked' | 'disliked') => {
     if (type === 'liked') {
       setLikedItems(prev => prev.filter(item => item.id !== id));
     } else {
@@ -76,28 +77,58 @@ export default function HomeScreen({
     }
   };
 
-  const handleMoveItem = (id: string, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => {
+  const handleMoveItem = async (id: number, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => {
     // Find the item to move
     const sourceList = fromType === 'liked' ? likedItems : dislikedItems;
     const item = sourceList.find(item => item.id === id);
     
     if (!item) return;
 
+    // Check if we have the required database information
+    if (!item.liked_disliked_id) {
+      console.error("Missing liked_disliked_id for item:", item);
+      alert("This item is missing database information. Cannot update like status.");
+      return;
+    }
+
     // Update the item's feedback status
     const updatedItem = { ...item, feedback: toType === 'liked' ? 'accept' as const : 'reject' as const };
 
-    // Remove from source list
+    // Update UI state immediately for visual feedback
     if (fromType === 'liked') {
       setLikedItems(prev => prev.filter(item => item.id !== id));
     } else {
       setDislikedItems(prev => prev.filter(item => item.id !== id));
     }
 
-    // Add to target list
     if (toType === 'liked') {
       setLikedItems(prev => [...prev, updatedItem]);
     } else {
       setDislikedItems(prev => [...prev, updatedItem]);
+    }
+
+    // Call backend API to update the database
+    try {
+      const payload = {
+        liked_disliked_id: item.liked_disliked_id
+      };
+      
+      console.log("Calling updateLikeStatus API with payload:", payload);
+      const result = await updateLikeStatus(payload);
+      console.log("Like status updated:", result);
+    } catch (error) {
+      console.error("Error updating like status:", error);
+      
+      // Revert UI state on error
+      if (fromType === 'liked') {
+        setLikedItems(prev => [...prev, item]);
+        setDislikedItems(prev => prev.filter(item => item.id !== id));
+      } else {
+        setDislikedItems(prev => [...prev, item]);
+        setLikedItems(prev => prev.filter(item => item.id !== id));
+      }
+      
+      alert("Failed to update like status. Please try again.");
     }
   };
 
@@ -172,6 +203,7 @@ export default function HomeScreen({
               guidelines={guidelines}
               items={youtubeItems}
               onItemFeedback={handleItemFeedback}
+              user={user}
             />
           </div>
           <div className="flex-1">
@@ -182,6 +214,7 @@ export default function HomeScreen({
               guidelines={guidelines}
               items={paperItems}
               onItemFeedback={handleItemFeedback}
+              user={user}
             />
           </div>
         </div>

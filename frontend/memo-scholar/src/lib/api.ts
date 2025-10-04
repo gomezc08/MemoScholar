@@ -1,7 +1,7 @@
 import type { CompleteProjectData, DatabaseUser, DatabaseProject } from '../types';
 
-export async function generateSubmission(topic: string, objective: string, guidelines: string) {
-  const payload = { topic, objective, guidelines };
+export async function generateSubmission(topic: string, objective: string, guidelines: string, user_id: number) {
+  const payload = { topic, objective, guidelines, user_id };
   const res = await fetch("/api/generate_submission/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -11,8 +11,8 @@ export async function generateSubmission(topic: string, objective: string, guide
   return res.json();
 }
 
-export async function generateSubmissionIndividualPanel(topic: string, objective: string, guidelines: string, user_special_instructions: string, panel_name: string) {
-  const payload = { topic, objective, guidelines, user_special_instructions, panel_name };
+export async function generateSubmissionIndividualPanel(topic: string, objective: string, guidelines: string, user_special_instructions: string, panel_name: string, user_id: number) {
+  const payload = { topic, objective, guidelines, user_special_instructions, panel_name, user_id };
   const res = await fetch("/api/generate_submission/individual_panel/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -22,13 +22,30 @@ export async function generateSubmissionIndividualPanel(topic: string, objective
   return res.json();
 }
 
-export async function acceptOrReject(payload: { panel_name: string; panel_name_content_id: string }) {
+export async function acceptOrReject(payload: { 
+  project_id: number; 
+  target_type: "youtube" | "paper"; 
+  target_id: number; 
+  isLiked: boolean 
+}) {
   const res = await fetch("/api/accept_or_reject/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error("Accept or reject failed");
+  return res.json();
+}
+
+export async function updateLikeStatus(payload: { 
+  liked_disliked_id: number;
+}) {
+  const res = await fetch("/api/accept_or_reject/update/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Update like failed");
   return res.json();
 }
 
@@ -75,6 +92,17 @@ export async function updateLike(likeId: number): Promise<void> {
     headers: { "Content-Type": "application/json" },
   });
   if (!res.ok) throw new Error("Failed to update like");
+  return res.json();
+}
+
+export async function createUser(name: string, email: string): Promise<{ success: boolean; user_id: number; name: string; email: string }> {
+  const payload = { name, email };
+  const res = await fetch("/api/users/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to create user");
   return res.json();
 }
 
