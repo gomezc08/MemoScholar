@@ -73,17 +73,27 @@ def generate_submission():
                 video.get('video_likes', 0)
             )
         
-        # Handle papers - insert each paper individually
+        # Handle papers - insert each paper individually with authors
         papers = paper_data.get('papers', [])
+        db_insert = DBInsert()
         for paper in papers:
-            DBInsert().create_paper(
+            # Extract authors from paper data
+            authors_list = paper.get('authors', [])
+            
+            # Create paper with authors
+            paper_id = db_insert.create_paper_with_authors(
                 project_id, 
                 query_id, 
                 paper.get('title', ''), 
                 paper.get('summary', ''), 
                 paper.get('year', 2024), 
-                paper.get('pdf_link', '')
+                paper.get('pdf_link', ''),
+                authors_list
             )
+            
+            if paper_id is None:
+                logger.warning(f"Failed to create paper: {paper.get('title', 'Unknown')}")
+        
         
         logger.info(f"SUCCESSFULLY RAN API CALL - Created project ID: {project_id}")
         
