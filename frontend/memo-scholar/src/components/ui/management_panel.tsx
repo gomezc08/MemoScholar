@@ -10,8 +10,8 @@ interface ManagementPanelProps {
   onClose: () => void;
   likedItems: Item[];
   dislikedItems: Item[];
-  onRemoveItem: (id: string, type: 'liked' | 'disliked') => void;
-  onMoveItem: (id: string, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => void;
+  onRemoveItem: (id: number, type: 'liked' | 'disliked') => void;
+  onMoveItem: (id: number, fromType: 'liked' | 'disliked', toType: 'liked' | 'disliked') => void;
 }
 
 export function ManagementPanel({ 

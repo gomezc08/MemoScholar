@@ -9,6 +9,7 @@ import { mockItems } from "@/lib/mock";
 import type { Item, PanelKind } from "@/types";
 import { acceptOrReject } from "@/lib/api";
 import { generateSubmissionIndividualPanel } from "@/lib/api";
+import { formatNumber, formatDuration } from "@/lib/dataTransformers";
 
 export function Panel({ 
   kind, 
@@ -55,15 +56,15 @@ export function Panel({
       // Handle the API response format - backend returns different arrays based on panel type
       if (result.success) {
         if (result.youtube && Array.isArray(result.youtube)) {
-          // Convert YouTube videos to panel items
+          // Convert YouTube videos to panel items with numeric IDs
           const youtubeItems = result.youtube.map((video: any, index: number) => ({
-            id: `youtube-${index}-${Date.now()}`,
+            id: Date.now() + index, // Generate unique numeric ID
             title: video.video_title,
             meta: {
               channel: "YouTube", // We could extract channel from video data if needed
               duration: video.video_duration,
-              views: video.video_views,
-              likes: video.video_likes,
+              views: parseInt(video.video_views) || 0, // Convert to number
+              likes: parseInt(video.video_likes) || 0, // Convert to number
               video_url: video.video_url
             },
             feedback: undefined as "accept" | "reject" | undefined
@@ -72,9 +73,9 @@ export function Panel({
           console.log("Created YouTube items:", youtubeItems);
           setItems(youtubeItems);
         } else if (result.papers && Array.isArray(result.papers)) {
-          // Convert papers to panel items
+          // Convert papers to panel items with numeric IDs
           const paperItems = result.papers.map((paper: any, index: number) => ({
-            id: `paper-${index}-${Date.now()}`,
+            id: Date.now() + index + 1000, // Generate unique numeric ID (offset to avoid conflicts)
             title: paper.title,
             meta: {
               venue: "ArXiv", // ArXiv is the source
@@ -99,7 +100,7 @@ export function Panel({
     }
   }
 
-  const acceptOrRejectPanelItem = async (id: string, label: "accept" | "reject") => {
+  const acceptOrRejectPanelItem = async (id: number, label: "accept" | "reject") => {
     const item = items.find(it => it.id === id);
     if (!item) return;
 
@@ -112,8 +113,8 @@ export function Panel({
     }
     
     try{
-      console.log("Calling acceptOrReject API on the following data:", { panel_name: label, panel_name_content_id: id });
-      const result = await acceptOrReject({ panel_name: label, panel_name_content_id: id });
+      console.log("Calling acceptOrReject API on the following data:", { panel_name: label, panel_name_content_id: id.toString() });
+      const result = await acceptOrReject({ panel_name: label, panel_name_content_id: id.toString() });
       console.log("Submission accepted or rejected:", result); 
       
       // Remove item after successful API call with delay for dissolve effect
@@ -184,7 +185,7 @@ export function Panel({
                   >
                     <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300">{it.title}</div>
                     <div className="text-xs text-zinc-400">
-                      <span>{it.meta.channel} • {it.meta.duration} • {it.meta.views} views • {it.meta.likes} likes</span>
+                      <span>{it.meta.channel} • {formatDuration(it.meta.duration || null)} • {formatNumber(it.meta.views || 0)} views • {formatNumber(it.meta.likes || 0)} likes</span>
                     </div>
                   </a>
                 ) : kind === "paper" && it.meta.link ? (
