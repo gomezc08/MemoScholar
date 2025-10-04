@@ -61,8 +61,11 @@ def generate_submission():
         # Update youtube and paper tables.
         # Handle YouTube videos - insert each video individually
         youtube_videos = youtube_data.get('youtube', [])
+        youtube_with_ids = []
+        db_insert = DBInsert()
+        
         for video in youtube_videos:
-            DBInsert().create_youtube(
+            youtube_id = db_insert.create_youtube(
                 project_id, 
                 query_id, 
                 video.get('video_title', ''), 
@@ -72,10 +75,20 @@ def generate_submission():
                 video.get('video_views', 0), 
                 video.get('video_likes', 0)
             )
+            
+            if youtube_id:
+                # Add database ID to the video data
+                video_with_id = video.copy()
+                video_with_id['youtube_id'] = youtube_id
+                youtube_with_ids.append(video_with_id)
+                logger.info(f"Created YouTube video with ID {youtube_id}: {video.get('video_title', 'Unknown')}")
+            else:
+                logger.warning(f"Failed to create YouTube video: {video.get('video_title', 'Unknown')}")
         
         # Handle papers - insert each paper individually with authors
         papers = paper_data.get('papers', [])
-        db_insert = DBInsert()
+        papers_with_ids = []
+        
         for paper in papers:
             # Extract authors from paper data
             authors_list = paper.get('authors', [])
@@ -91,16 +104,29 @@ def generate_submission():
                 authors_list
             )
             
-            if paper_id is None:
+            if paper_id:
+                # Add database ID to the paper data
+                paper_with_id = paper.copy()
+                paper_with_id['paper_id'] = paper_id
+                papers_with_ids.append(paper_with_id)
+                logger.info(f"Created paper with ID {paper_id}: {paper.get('title', 'Unknown')}")
+            else:
                 logger.warning(f"Failed to create paper: {paper.get('title', 'Unknown')}")
         
         
         logger.info(f"SUCCESSFULLY RAN API CALL - Created project ID: {project_id}")
+        logger.info(f"Returning {len(youtube_with_ids)} YouTube videos with IDs")
+        logger.info(f"Returning {len(papers_with_ids)} papers with IDs")
+        if youtube_with_ids:
+            logger.info(f"First YouTube video: {youtube_with_ids[0]}")
+        if papers_with_ids:
+            logger.info(f"First paper: {papers_with_ids[0]}")
         
         return jsonify({
             'success': True,
-            'youtube': youtube_videos,
-            'papers': papers
+            'project_id': project_id,
+            'youtube': youtube_with_ids,
+            'papers': papers_with_ids
         }), 200
     except Exception as e:
         logger.error(f"Exception in generate_submission: {str(e)}")

@@ -22,7 +22,12 @@ export async function generateSubmissionIndividualPanel(topic: string, objective
   return res.json();
 }
 
-export async function acceptOrReject(payload: { panel_name: string; panel_name_content_id: string }) {
+export async function acceptOrReject(payload: { 
+  project_id: number; 
+  target_type: "youtube" | "paper"; 
+  target_id: number; 
+  isLiked: boolean 
+}) {
   const res = await fetch("/api/accept_or_reject/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

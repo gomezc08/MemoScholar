@@ -54,15 +54,33 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
       const result = await generateSubmission(topic, objective, guidelines, user.user_id); 
       console.log("Submission generated:", result);
       console.log("YouTube array:", result.youtube);
-      console.log("Papers array:", result.papers); 
+      console.log("Papers array:", result.papers);
+      console.log("Project ID:", result.project_id);
+      
+      // Debug: Check if database IDs are present
+      if (result.youtube && result.youtube.length > 0) {
+        console.log("First YouTube video from backend:", result.youtube[0]);
+        console.log("YouTube video has youtube_id:", 'youtube_id' in result.youtube[0]);
+        console.log("YouTube video keys:", Object.keys(result.youtube[0]));
+      }
+      if (result.papers && result.papers.length > 0) {
+        console.log("First paper from backend:", result.papers[0]);
+        console.log("Paper has paper_id:", 'paper_id' in result.papers[0]);
+        console.log("Paper keys:", Object.keys(result.papers[0]));
+      } 
       
       // Handle the new API response format
       if (result.success) {
+        const projectId = result.project_id;
+        
         // Handle YouTube videos
         if (result.youtube && Array.isArray(result.youtube)) {
           const youtubeItems = result.youtube.map((video: any, index: number) => ({
             id: `youtube-${index}-${Date.now()}`,
             title: video.video_title,
+            database_id: video.youtube_id, // Database ID for like/dislike
+            target_type: "youtube" as const,
+            project_id: projectId,
             meta: {
               channel: "YouTube", // We could extract channel from video data if needed
               duration: video.video_duration,
@@ -73,7 +91,13 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
             feedback: undefined as "accept" | "reject" | undefined
           }));
           
-          console.log("Created YouTube items:", youtubeItems);
+          console.log("Created YouTube items with database info:", youtubeItems);
+          if (youtubeItems.length > 0) {
+            console.log("First YouTube item properties:", Object.keys(youtubeItems[0]));
+            console.log("First YouTube item database_id:", youtubeItems[0].database_id);
+            console.log("First YouTube item target_type:", youtubeItems[0].target_type);
+            console.log("First YouTube item project_id:", youtubeItems[0].project_id);
+          }
         }
         
         // Handle papers
@@ -81,6 +105,9 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
           const paperItems = result.papers.map((paper: any, index: number) => ({
             id: `paper-${index}-${Date.now()}`,
             title: paper.title,
+            database_id: paper.paper_id, // Database ID for like/dislike
+            target_type: "paper" as const,
+            project_id: projectId,
             meta: {
               venue: "ArXiv", // ArXiv is the source
               year: new Date(paper.published).getFullYear(),
@@ -92,7 +119,13 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
             feedback: undefined as "accept" | "reject" | undefined
           }));
           
-          console.log("Created paper items:", paperItems);
+          console.log("Created paper items with database info:", paperItems);
+          if (paperItems.length > 0) {
+            console.log("First paper item properties:", Object.keys(paperItems[0]));
+            console.log("First paper item database_id:", paperItems[0].database_id);
+            console.log("First paper item target_type:", paperItems[0].target_type);
+            console.log("First paper item project_id:", paperItems[0].project_id);
+          }
         }
         
         // Call the completion handler with the project details and generated items
@@ -103,6 +136,9 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
           result.youtube ? result.youtube.map((video: any, index: number) => ({
             id: `youtube-${index}-${Date.now()}`,
             title: video.video_title,
+            database_id: video.youtube_id,
+            target_type: "youtube" as const,
+            project_id: projectId,
             meta: {
               channel: "YouTube",
               duration: video.video_duration,
@@ -115,6 +151,9 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
           result.papers ? result.papers.map((paper: any, index: number) => ({
             id: `paper-${index}-${Date.now()}`,
             title: paper.title,
+            database_id: paper.paper_id,
+            target_type: "paper" as const,
+            project_id: projectId,
             meta: {
               venue: "ArXiv",
               year: new Date(paper.published).getFullYear(),

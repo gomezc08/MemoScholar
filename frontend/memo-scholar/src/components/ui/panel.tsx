@@ -111,6 +111,14 @@ export function Panel({
     const item = items.find(it => it.id === id);
     if (!item) return;
 
+    // Check if we have the required database information
+    if (!item.database_id || !item.target_type || !item.project_id) {
+      console.error("Missing database information for item:", item);
+      console.error("Available properties:", Object.keys(item));
+      alert("This item is missing database information. Please regenerate the content to fix this issue.");
+      return;
+    }
+
     // Update UI state immediately for visual feedback
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
     
@@ -120,8 +128,15 @@ export function Panel({
     }
     
     try{
-      console.log("Calling acceptOrReject API on the following data:", { panel_name: label, panel_name_content_id: id.toString() });
-      const result = await acceptOrReject({ panel_name: label, panel_name_content_id: id.toString() });
+      const payload = {
+        project_id: item.project_id,
+        target_type: item.target_type,
+        target_id: item.database_id,
+        isLiked: label === "accept"
+      };
+      
+      console.log("Calling acceptOrReject API with payload:", payload);
+      const result = await acceptOrReject(payload);
       console.log("Submission accepted or rejected:", result); 
       
       // Remove item after successful API call with delay for dissolve effect
