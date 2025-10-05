@@ -7,14 +7,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ..db.db_crud.insert import DBInsert
 from ..db.db_crud.change import DBChange
-from ..config.constants import ACCEPT_OR_REJECT
+from ..config.constants import LIKE_DISLIKE
 
-accept_or_reject_bp = Blueprint('accept_or_reject', __name__)
+like_dislike_bp = Blueprint('like_dislike', __name__)
 
-@accept_or_reject_bp.route(ACCEPT_OR_REJECT, methods=['POST'])
-def accept_or_reject():
+@like_dislike_bp.route(LIKE_DISLIKE, methods=['POST'])
+def like_dislike():
     """
-    Provides ability to recognize whether the submission is accepted or rejected.
+    Provides ability to recognize whether the submission is liked or disliked.
     Creates a like/dislike record in the database.
     """
     try:
@@ -69,8 +69,8 @@ def accept_or_reject():
             'success': False
         }), 500
 
-@accept_or_reject_bp.route(ACCEPT_OR_REJECT + "update/", methods=['PUT'])
-def update_like():
+@like_dislike_bp.route(LIKE_DISLIKE + "update/", methods=['PUT'])
+def update_like_dislike():
     """
     Updates an existing like/dislike record.
     Toggles the isLiked value for the given liked_disliked_id.

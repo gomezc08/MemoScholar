@@ -28,24 +28,24 @@ export async function acceptOrReject(payload: {
   target_id: number; 
   isLiked: boolean 
 }) {
-  const res = await fetch("/api/accept_or_reject/", {
+  const res = await fetch("/api/like_dislike/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Accept or reject failed");
+  if (!res.ok) throw new Error("Like or dislike failed");
   return res.json();
 }
 
 export async function updateLikeStatus(payload: { 
   liked_disliked_id: number;
 }) {
-  const res = await fetch("/api/accept_or_reject/update/", {
+  const res = await fetch("/api/like_dislike/update/", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Update like failed");
+  if (!res.ok) throw new Error("Update like or dislike failed");
   return res.json();
 }
 

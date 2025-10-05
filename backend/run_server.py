@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 # Import blueprints
 from src.routes.submission_routes import submission_bp
-from src.routes.accept_or_reject_routes import accept_or_reject_bp
+from src.routes.like_dislike_routes import like_dislike_bp
 from src.routes.user_routes import user_bp
 
 def create_app():
@@ -23,7 +23,7 @@ def create_app():
     
     # Register blueprints
     app.register_blueprint(submission_bp)
-    app.register_blueprint(accept_or_reject_bp)
+    app.register_blueprint(like_dislike_bp)
     app.register_blueprint(user_bp)
     
     # Add a root endpoint
@@ -38,8 +38,8 @@ def create_app():
                     'POST /generate_submission/': 'Generate submission content',
                     'POST /generate_submission/individual_panel/': 'Generate panel-specific content'
                 },
-                'accept_reject': {
-                    'POST /accept_or_reject/': 'Accept or reject submission'
+                'like_dislike': {
+                    'POST /like_dislike/': 'Like or dislike submission'
                 },
                 'user': {
                     'POST /api/users/': 'Create or get user',
