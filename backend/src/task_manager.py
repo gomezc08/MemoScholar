@@ -3,6 +3,7 @@ from src.generate_content.paper_generator import PaperGenerator
 from src.db.db_crud.insert import DBInsert
 from src.db.db_crud.select_db import DBSelect
 from src.utils.logging_config import get_logger
+from src.db.db_crud.change import DBChange
 
 class TaskManager:
     def __init__(self):
@@ -56,6 +57,215 @@ class TaskManager:
             result['error'] = str(e)
         
         return result
+    
+    def handle_like_dislike(self, data):
+        """
+        Create a new like/dislike record in the database.
+        Returns like ID or raises exception on failure.
+        """
+        try:
+            # Validate required fields
+            required_fields = ['project_id', 'target_type', 'target_id', 'isLiked']
+            for field in required_fields:
+                if field not in data:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Validate target_type
+            if data['target_type'] not in ['youtube', 'paper']:
+                raise ValueError("target_type must be either 'youtube' or 'paper'")
+            
+            # Validate boolean isLiked
+            if not isinstance(data['isLiked'], bool):
+                raise ValueError("isLiked must be a boolean value")
+            
+            # Create the like/dislike record
+            like_id = self.db_insert.create_like(
+                project_id=data['project_id'],
+                target_type=data['target_type'],
+                target_id=data['target_id'],
+                isLiked=data['isLiked']
+            )
+            
+            if like_id is None:
+                error_msg = "Failed to create like/dislike record in database"
+                self.logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            self.logger.info(f"Successfully created like/dislike record with ID {like_id}")
+            return like_id
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_like_dislike: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_like_dislike: {str(e)}")
+            raise RuntimeError(f"Failed to create like/dislike record: {str(e)}")
+    
+    def handle_like_dislike_update(self, data):
+        """
+        Update an existing like/dislike record in the database.
+        Toggles the isLiked status for the given record.
+        """
+        try:
+            # Validate required fields
+            if 'liked_disliked_id' not in data:
+                raise ValueError("Missing required field: liked_disliked_id")
+            
+            # Validate liked_disliked_id is a positive integer
+            try:
+                liked_disliked_id = int(data['liked_disliked_id'])
+                if liked_disliked_id <= 0:
+                    raise ValueError("liked_disliked_id must be a positive integer")
+            except (ValueError, TypeError):
+                raise ValueError("liked_disliked_id must be a positive integer")
+            
+            # Update the like/dislike record
+            success = DBChange().update_like(liked_disliked_id)
+            
+            if not success:
+                error_msg = f"Failed to update like/dislike record with ID {liked_disliked_id}"
+                self.logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            self.logger.info(f"Successfully updated like/dislike record with ID {liked_disliked_id}")
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_like_dislike_update: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_like_dislike_update: {str(e)}")
+            raise RuntimeError(f"Failed to update like/dislike record: {str(e)}")
+    
+    def handle_user_signup(self, data):
+        """
+        Create a new user in the database.
+        Returns user data or raises exception on failure.
+        """
+        try:
+            # Validate required fields
+            required_fields = ['name', 'email']
+            for field in required_fields:
+                if field not in data:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Check if user already exists
+            existing_user = self.db_select.get_user_by_email(data['email'].strip().lower())
+            
+            if existing_user:
+                # User already exists, return existing user info
+                self.logger.info(f"User already exists with ID: {existing_user['user_id']}")
+                return {
+                    'user_id': existing_user['user_id'],
+                    'name': existing_user['name'],
+                    'email': existing_user['email']
+                }
+            
+            # Create new user
+            user_id = self.db_insert.create_user(data['name'].strip(), data['email'].strip().lower())
+            
+            if user_id is None:
+                raise RuntimeError("Failed to create user in database")
+            
+            self.logger.info(f"Successfully created user with ID: {user_id}")
+            return {
+                'user_id': user_id,
+                'name': data['name'].strip(),
+                'email': data['email'].strip().lower()
+            }
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_user_signup: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_user_signup: {str(e)}")
+            raise RuntimeError(f"Failed to handle user signup: {str(e)}")
+    
+    def handle_user_login(self, data):
+        """
+        Login a user by email.
+        Returns user data or raises exception on failure.
+        """
+        try:
+            # Validate required fields
+            if 'email' not in data:
+                raise ValueError("Missing required field: email")
+            
+            # Get user by email
+            user = self.db_select.get_user_by_email(data['email'].strip().lower())
+            
+            if not user:
+                raise ValueError("User not found with this email")
+            
+            self.logger.info(f"User login successful for ID: {user['user_id']}")
+            return {
+                'user_id': user['user_id'],
+                'name': user['name'],
+                'email': user['email']
+            }
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_user_login: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_user_login: {str(e)}")
+            raise RuntimeError(f"Failed to handle user login: {str(e)}")
+    
+    def handle_get_user(self, user_id):
+        """
+        Get user information by user_id.
+        Returns user data or raises exception on failure.
+        """
+        try:
+            # Validate user_id
+            if not user_id or user_id <= 0:
+                raise ValueError("Invalid user_id provided")
+            
+            # Get user by user_id
+            user = self.db_select.get_user(user_id)
+            
+            if not user:
+                raise ValueError("User not found with this ID")
+            
+            self.logger.info(f"Retrieved user with ID: {user['user_id']}")
+            return {
+                'user_id': user['user_id'],
+                'name': user['name'],
+                'email': user['email']
+            }
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_user: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_user: {str(e)}")
+            raise RuntimeError(f"Failed to get user: {str(e)}")
+    
+    def handle_user_projects(self, user_id):
+        """
+        Get all projects for a user by user_id.
+        Returns list of projects or raises exception on failure.
+        """
+        try:
+            # Validate user_id
+            if not user_id or user_id <= 0:
+                raise ValueError("Invalid user_id provided")
+            
+            # Get projects for user
+            projects = self.db_select.get_user_projects(user_id)
+            
+            if projects is None:
+                raise RuntimeError("Failed to retrieve projects from database")
+            
+            self.logger.info(f"Retrieved {len(projects)} projects for user ID: {user_id}")
+            return projects
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_user_projects: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_user_projects: {str(e)}")
+            raise RuntimeError(f"Failed to get user projects: {str(e)}")
+
     
     def _handle_project_task(self, data):
         """

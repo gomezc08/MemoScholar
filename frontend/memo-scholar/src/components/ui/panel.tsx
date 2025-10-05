@@ -124,7 +124,10 @@ export function Panel({
 
   const acceptOrRejectPanelItem = async (id: number, label: "accept" | "reject") => {
     const item = items.find(it => it.id === id);
-    if (!item) return;
+    if (!item) {
+      console.error("Item not found with id:", id);
+      return;
+    }
 
     // Check if we have the required database information
     if (!item.database_id || !item.target_type || !item.project_id) {
@@ -137,7 +140,10 @@ export function Panel({
     // Update UI state immediately for visual feedback
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
     
-    try{
+    try {
+      let result;
+      let updatedItem = { ...item, feedback: label };
+
       // Check if this item already has a like record (for updates)
       if (item.liked_disliked_id) {
         // Update existing like/dislike record
@@ -146,15 +152,17 @@ export function Panel({
         };
         
         console.log("Calling updateLikeStatus API with payload:", payload);
-        const result = await updateLikeStatus(payload);
+        result = await updateLikeStatus(payload);
         console.log("Like updated:", result);
         
-        // Update the item with the new like ID if returned
-        if (result.liked_disliked_id) {
-          setItems(prev => prev.map(it => 
-            it.id === id ? { ...it, liked_disliked_id: result.liked_disliked_id } : it
-          ));
+        // Check if update was successful
+        if (!result.success) {
+          throw new Error(result.error || "Failed to update like/dislike status");
         }
+        
+        // Update the item with the liked_disliked_id (should remain the same)
+        updatedItem.liked_disliked_id = item.liked_disliked_id;
+        
       } else {
         // Create new like/dislike record
         const payload = {
@@ -165,30 +173,45 @@ export function Panel({
         };
         
         console.log("Calling acceptOrReject API with payload:", payload);
-        const result = await acceptOrReject(payload);
+        result = await acceptOrReject(payload);
         console.log("Submission accepted or rejected:", result);
+        
+        // Check if creation was successful
+        if (!result.success) {
+          throw new Error(result.error || "Failed to create like/dislike record");
+        }
         
         // Update the item with the new like ID
         if (result.like_id) {
-          const updatedItem = { ...item, liked_disliked_id: result.like_id, feedback: label };
-          setItems(prev => prev.map(it => 
-            it.id === id ? updatedItem : it
-          ));
-          
-          // Call the parent callback with the updated item (now has liked_disliked_id)
-          if (onItemFeedback) {
-            onItemFeedback(updatedItem, label);
-          }
+          updatedItem.liked_disliked_id = result.like_id;
+        } else {
+          throw new Error("No like_id returned from server");
         }
       }
       
+      // Update the item in state with all the correct information
+      setItems(prev => prev.map(it => it.id === id ? updatedItem : it));
+      
+      // Call the parent callback with the updated item
+      if (onItemFeedback) {
+        onItemFeedback(updatedItem, label);
+      }
+      
       // Remove item after successful API call with delay for dissolve effect
-      setTimeout(() => setItems(prev => prev.filter(it => it.id !== id)), 800);
-    } 
-    catch (e) {
-      console.error("Error accepting or rejecting:", e);
+      setTimeout(() => {
+        setItems(prev => prev.filter(it => it.id !== id));
+      }, 800);
+      
+    } catch (error) {
+      console.error("Error accepting or rejecting:", error);
       // Revert the feedback state on error
-      setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: undefined } : it));
+      setItems(prev => prev.map(it => 
+        it.id === id ? { ...it, feedback: undefined } : it
+      ));
+      
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      alert(`Failed to ${label} item: ${errorMessage}`);
     }
   }
 

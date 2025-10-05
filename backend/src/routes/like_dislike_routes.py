@@ -5,16 +5,15 @@ import os
 # Add the parent directory to the path to import from openai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ..db.db_crud.insert import DBInsert
-from ..db.db_crud.change import DBChange
-from ..config.constants import ACCEPT_OR_REJECT
+from ..task_manager import TaskManager
+from ..config.constants import LIKE_DISLIKE
 
-accept_or_reject_bp = Blueprint('accept_or_reject', __name__)
+like_dislike_bp = Blueprint('like_dislike', __name__)
 
-@accept_or_reject_bp.route(ACCEPT_OR_REJECT, methods=['POST'])
-def accept_or_reject():
+@like_dislike_bp.route(LIKE_DISLIKE, methods=['POST'])
+def like_dislike():
     """
-    Provides ability to recognize whether the submission is accepted or rejected.
+    Provides ability to recognize whether the submission is liked or disliked.
     Creates a like/dislike record in the database.
     """
     try:
@@ -43,19 +42,7 @@ def accept_or_reject():
                 'success': False
             }), 400
         
-        # Create the like/dislike record
-        like_id = DBInsert().create_like(
-            project_id=data['project_id'],
-            target_type=data['target_type'],
-            target_id=data['target_id'],
-            isLiked=data['isLiked']
-        )
-        
-        if like_id is None:
-            return jsonify({
-                'error': 'Failed to create like/dislike record',
-                'success': False
-            }), 500
+        like_id = TaskManager().handle_like_dislike(data)
         
         return jsonify({
             'success': True,
@@ -69,8 +56,8 @@ def accept_or_reject():
             'success': False
         }), 500
 
-@accept_or_reject_bp.route(ACCEPT_OR_REJECT + "update/", methods=['PUT'])
-def update_like():
+@like_dislike_bp.route(LIKE_DISLIKE + "update/", methods=['PUT'])
+def update_like_dislike():
     """
     Updates an existing like/dislike record.
     Toggles the isLiked value for the given liked_disliked_id.
@@ -97,9 +84,9 @@ def update_like():
                 'error': 'liked_disliked_id must be a positive integer',
                 'success': False
             }), 400
-        
+            
         # Update the like/dislike record
-        DBChange().update_like(liked_disliked_id)
+        TaskManager().handle_like_dislike_update(data)
         
         return jsonify({
             'success': True,

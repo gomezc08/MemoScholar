@@ -11,15 +11,30 @@ class DBChange:
         self.connector = Connector()
     
     def update_like(self, liked_disliked_id):
+        """
+        Update an existing like/dislike record by toggling the isLiked status.
+        Returns True if successful, False otherwise.
+        """
         self.connector.open_connection()
         try:
             query = "UPDATE likes SET isLiked = NOT isLiked WHERE liked_disliked_id = %s"
             values = (liked_disliked_id,)
             self.connector.cursor.execute(query, values)
+            
+            # Check if any rows were affected
+            rows_affected = self.connector.cursor.rowcount
+            if rows_affected == 0:
+                print(f"No like/dislike record found with ID {liked_disliked_id}")
+                return False
+            
             self.connector.cnx.commit()
+            print(f"Successfully updated like/dislike record with ID {liked_disliked_id}")
+            return True
+            
         except Exception as e:
-            print(e)
+            print(f"Error updating like/dislike record: {e}")
             self.connector.cnx.rollback()
+            return False
         finally:
             self.connector.close_connection()
     
