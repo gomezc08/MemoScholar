@@ -5,8 +5,7 @@ import os
 # Add the parent directory to the path to import from openai module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ..db.db_crud.insert import DBInsert
-from ..db.db_crud.change import DBChange
+from ..task_manager import TaskManager
 from ..config.constants import LIKE_DISLIKE
 
 like_dislike_bp = Blueprint('like_dislike', __name__)
@@ -43,19 +42,7 @@ def like_dislike():
                 'success': False
             }), 400
         
-        # Create the like/dislike record
-        like_id = DBInsert().create_like(
-            project_id=data['project_id'],
-            target_type=data['target_type'],
-            target_id=data['target_id'],
-            isLiked=data['isLiked']
-        )
-        
-        if like_id is None:
-            return jsonify({
-                'error': 'Failed to create like/dislike record',
-                'success': False
-            }), 500
+        like_id = TaskManager().handle_like_dislike(data)
         
         return jsonify({
             'success': True,
@@ -97,9 +84,9 @@ def update_like_dislike():
                 'error': 'liked_disliked_id must be a positive integer',
                 'success': False
             }), 400
-        
+            
         # Update the like/dislike record
-        DBChange().update_like(liked_disliked_id)
+        TaskManager().handle_like_dislike_update(data)
         
         return jsonify({
             'success': True,
