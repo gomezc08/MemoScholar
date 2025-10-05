@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 import sys
 import os
 
-from ..db.db_crud.insert import DBInsert
+from ..task_manager import TaskManager
 from ..utils.logging_config import get_logger
 
 # Initialize logger for this module
@@ -29,40 +29,14 @@ def create_user():
                     'success': False
                 }), 400
         
-        # Check if user already exists by email first
-        from ..db.db_crud.select_db import DBSelect
-        db_select = DBSelect()
-        existing_user = db_select.get_user_by_email(data['email'].strip().lower())
-        
-        if existing_user:
-            # User already exists, return existing user info
-            logger.info(f"User already exists with ID: {existing_user['user_id']}")
-            return jsonify({
-                'success': True,
-                'user_id': existing_user['user_id'],
-                'name': existing_user['name'],
-                'email': existing_user['email']
-            }), 200
-        
-        # Create new user
-        db_insert = DBInsert()
-        user_id = db_insert.create_user(data['name'].strip(), data['email'].strip().lower())
-        
-        if user_id:
-            logger.info(f"Successfully created user with ID: {user_id}")
-            return jsonify({
-                'success': True,
-                'user_id': user_id,
-                'name': data['name'].strip(),
-                'email': data['email'].strip().lower()
-            }), 200
-        else:
-            logger.error("User creation failed")
-            return jsonify({
-                'error': 'User creation failed',
-                'success': False
-            }), 500
-            
+        # Sign up/login user
+        user = TaskManager().handle_user_creation(data)
+        return jsonify({
+            'success': True,
+            'user_id': user['user_id'],
+            'name': user['name'],
+            'email': user['email']
+        }), 200
     except Exception as e:
         logger.error(f"Exception in create_user: {str(e)}")
         return jsonify({
@@ -95,6 +69,24 @@ def get_user(user_id):
             
     except Exception as e:
         logger.error(f"Exception in get_user: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
+@user_bp.route('/api/users/<int:user_id>/projects', methods=['GET'])
+def get_user_projects(user_id):
+    """
+    Get all projects for a user by user_id.
+    """
+    try:
+        projects = TaskManager().handle_user_projects(user_id)
+        return jsonify({
+            'success': True,
+            'projects': projects
+        }), 200
+    except Exception as e:
+        logger.error(f"Exception in get_user_projects: {str(e)}")
         return jsonify({
             'error': str(e),
             'success': False

@@ -136,6 +136,42 @@ class TaskManager:
             self.logger.error(f"Unexpected error in handle_like_dislike_update: {str(e)}")
             raise RuntimeError(f"Failed to update like/dislike record: {str(e)}")
     
+    def handle_user_creation(self, data):
+        """
+        Create a new user in the database.
+        Returns user ID or raises exception on failure.
+        """
+        
+        existing_user = self.db_select.get_user_by_email(data['email'].strip().lower())
+        
+        if existing_user:
+            # User already exists, return existing user info
+            self.logger.info(f"User already exists with ID: {existing_user['user_id']}")
+            return {
+                'success': True,
+                'user_id': existing_user['user_id'],
+                'name': existing_user['name'],
+                'email': existing_user['email']
+            }
+        
+        # Create new user
+        user_id = self.db_insert.create_user(data['name'].strip(), data['email'].strip().lower())
+        
+        if user_id:
+            self.logger.info(f"Successfully created user with ID: {user_id}")
+            return {
+                'success': True,
+                'user_id': user_id,
+                'name': data['name'].strip(),
+                'email': data['email'].strip().lower()
+            }
+        else:
+            self.logger.error("User creation failed")
+            return {
+                'error': 'User creation failed',
+                'success': False
+            }
+    
     def _handle_project_task(self, data):
         """
         Create a new project in the database.
