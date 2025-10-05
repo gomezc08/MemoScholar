@@ -82,8 +82,16 @@ export async function getUserProjects(userId: number): Promise<DatabaseProject[]
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error("Failed to get user projects");
-  return res.json();
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error(`Failed to get user projects: ${res.status} ${res.statusText}`, errorText);
+    throw new Error(`Failed to get user projects: ${res.status} ${res.statusText}`);
+  }
+  
+  const response = await res.json();
+  console.log('API Response:', response);
+  return response.projects || [];
 }
 
 export async function updateLike(likeId: number): Promise<void> {

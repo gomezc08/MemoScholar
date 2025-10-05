@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HeaderBar } from "@/components/ui/header_bar";
 import SimpleLogin from "@/components/ui/simple-login";
+import ConversationsSidebar from "@/components/ui/conversations-sidebar";
 import { generateSubmission } from "@/lib/api";
-import type { Item, UserProfile } from "@/types";
+import type { Item, UserProfile, DatabaseProject } from "@/types";
 
 interface ProjectProps {
   onProjectComplete: (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[], project_id: number, query_id: number) => void;
@@ -21,6 +22,27 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
   const [guidelines, setGuidelines] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+
+  const handleProjectSelect = async (project: DatabaseProject) => {
+    // Navigate to the next screen with the project data
+    // We'll call onProjectComplete with empty arrays for now since we don't have the complete data
+    // The next screen can load the complete data if needed
+    try {
+      onProjectComplete(
+        project.topic,
+        project.objective,
+        project.guidelines,
+        [], // Empty YouTube items for now
+        [], // Empty paper items for now
+        project.project_id,
+        0 // Default query_id, can be updated later
+      );
+    } catch (error) {
+      console.error('Failed to navigate to project:', error);
+      setValidationError("Failed to load project. Please try again.");
+    }
+  };
 
   const onRun = async () => {
     // Clear previous validation errors
@@ -183,28 +205,62 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white">
+      {/* Sidebar - only show if user is logged in */}
+      {user && (
+        <ConversationsSidebar
+          user={user}
+          onProjectSelect={handleProjectSelect}
+          isHovered={isSidebarHovered}
+          onMouseEnter={() => setIsSidebarHovered(true)}
+          onMouseLeave={() => setIsSidebarHovered(false)}
+        />
+      )}
+      
       <HeaderBar />
       
-      {/* Simple Login Section */}
-      <div className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-400">Welcome to MemoScholar</span>
-            {user && (
+      {/* Hoverable trigger section that replaces welcome section */}
+      {user && (
+        <div 
+          className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800 cursor-pointer hover:bg-zinc-800 transition-colors"
+          onMouseEnter={() => setIsSidebarHovered(true)}
+          onMouseLeave={() => setIsSidebarHovered(false)}
+        >
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-400">Click or hover to view past conversations</span>
               <span className="text-sm text-pink-400">
                 • Signed in as {user.name}
               </span>
-            )}
+            </div>
+            <SimpleLogin 
+              onLogin={onUserLogin}
+              onLogout={onUserLogout}
+              user={user}
+            />
           </div>
-          <SimpleLogin 
-            onLogin={onUserLogin}
-            onLogout={onUserLogout}
-            user={user}
-          />
         </div>
-      </div>
+      )}
+      
+      {/* Show regular welcome section if not logged in */}
+      {!user && (
+        <div className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-400">Welcome to MemoScholar</span>
+            </div>
+            <SimpleLogin 
+              onLogin={onUserLogin}
+              onLogout={onUserLogout}
+              user={user}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
 
-      <main className="flex-1 w-full px-8 py-12">
+        <main className="flex-1 w-full px-8 py-12">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-white mb-4">Enter Your Project Details Below</h1>
@@ -264,7 +320,8 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
             </div>
           </div>
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
