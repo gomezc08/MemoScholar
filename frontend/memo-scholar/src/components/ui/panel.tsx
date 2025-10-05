@@ -18,7 +18,9 @@ export function Panel({
   guidelines = "",
   items: externalItems,
   onItemFeedback,
-  user
+  user,
+  project_id,
+  query_id
 }: { 
   kind: PanelKind; 
   topic?: string; 
@@ -27,6 +29,8 @@ export function Panel({
   items?: Item[];
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
   user?: { user_id?: number } | null;
+  project_id?: number;
+  query_id?: number;
 }) {
   const [instructions, setInstructions] = useState("");
   const [items, setItems] = useState<Item[]>(() => externalItems || (kind === "model" ? mockItems(kind) : []));
@@ -52,21 +56,29 @@ export function Panel({
       return;
     }
     
+    if (!project_id || !query_id) {
+      alert('Project ID and Query ID are required for individual panel generation');
+      return;
+    }
+    
     setIsRegenerating(true);
     try{
-      console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions, user_id: user.user_id });
-      const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label, user.user_id);
+      console.log("Calling generateSubmissionIndividualPanel on the following data:", { panel_name: label, topic: topic, objective: objective, guidelines: guidelines, user_special_instructions: instructions, user_id: user.user_id, project_id, query_id });
+      const result = await generateSubmissionIndividualPanel(topic, objective, guidelines, instructions, label, user.user_id, project_id, query_id);
       console.log("Submission generated:", result);
       console.log("YouTube array:", result.youtube);
       console.log("Papers array:", result.papers); 
       
       // Handle the API response format - backend returns different arrays based on panel type
       if (result.success) {
-        if (result.youtube && Array.isArray(result.youtube)) {
+        if (label === "YouTube" && result.youtube && Array.isArray(result.youtube) && result.youtube.length > 0) {
           // Convert YouTube videos to panel items with numeric IDs
           const youtubeItems = result.youtube.map((video: any, index: number) => ({
             id: Date.now() + index, // Generate unique numeric ID
             title: video.video_title,
+            database_id: video.youtube_id, // Add database ID for like/dislike functionality
+            target_type: "youtube" as const,
+            project_id: project_id,
             meta: {
               channel: "YouTube", // We could extract channel from video data if needed
               duration: video.video_duration,
@@ -79,11 +91,14 @@ export function Panel({
           
           console.log("Created YouTube items:", youtubeItems);
           setItems(youtubeItems);
-        } else if (result.papers && Array.isArray(result.papers)) {
+        } else if (label === "Papers" && result.papers && Array.isArray(result.papers) && result.papers.length > 0) {
           // Convert papers to panel items with numeric IDs
           const paperItems = result.papers.map((paper: any, index: number) => ({
             id: Date.now() + index + 1000, // Generate unique numeric ID (offset to avoid conflicts)
             title: paper.title,
+            database_id: paper.paper_id, // Add database ID for like/dislike functionality
+            target_type: "paper" as const,
+            project_id: project_id,
             meta: {
               venue: "ArXiv", // ArXiv is the source
               year: new Date(paper.published).getFullYear(),

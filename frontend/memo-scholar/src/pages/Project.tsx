@@ -9,7 +9,7 @@ import { generateSubmission } from "@/lib/api";
 import type { Item, UserProfile } from "@/types";
 
 interface ProjectProps {
-  onProjectComplete: (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[]) => void;
+  onProjectComplete: (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[], project_id: number, query_id: number) => void;
   user: UserProfile | null;
   onUserLogin: (user: UserProfile) => void;
   onUserLogout: () => void;
@@ -72,6 +72,7 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
       // Handle the new API response format
       if (result.success) {
         const projectId = result.project_id;
+        const queryId = result.query_id;
         
         // Handle YouTube videos
         if (result.youtube && Array.isArray(result.youtube)) {
@@ -163,7 +164,9 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
               summary: paper.summary
             },
             feedback: undefined as "accept" | "reject" | undefined
-          })) : []
+          })) : [],
+          projectId,
+          queryId
         );
       } else if (result.error) {
         setValidationError(result.error);

@@ -11,8 +11,8 @@ export async function generateSubmission(topic: string, objective: string, guide
   return res.json();
 }
 
-export async function generateSubmissionIndividualPanel(topic: string, objective: string, guidelines: string, user_special_instructions: string, panel_name: string, user_id: number) {
-  const payload = { topic, objective, guidelines, user_special_instructions, panel_name, user_id };
+export async function generateSubmissionIndividualPanel(topic: string, objective: string, guidelines: string, user_special_instructions: string, panel_name: string, user_id: number, project_id: number, query_id: number) {
+  const payload = { topic, objective, guidelines, user_special_instructions, panel_name, user_id, project_id, query_id };
   const res = await fetch("/api/generate_submission/individual_panel/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -14,6 +14,8 @@ interface HomeScreenProps {
   guidelines: string;
   youtubeItems: Item[];
   paperItems: Item[];
+  project_id: number;
+  query_id: number;
   onBackToSetup: () => void;
   user: UserProfile | null;
   onUserLogin: (user: UserProfile) => void;
@@ -26,6 +28,8 @@ export default function HomeScreen({
   guidelines, 
   youtubeItems, 
   paperItems, 
+  project_id,
+  query_id,
   onBackToSetup,
   user,
   onUserLogin,
@@ -204,6 +208,8 @@ export default function HomeScreen({
               items={youtubeItems}
               onItemFeedback={handleItemFeedback}
               user={user}
+              project_id={project_id}
+              query_id={query_id}
             />
           </div>
           <div className="flex-1">
@@ -215,6 +221,8 @@ export default function HomeScreen({
               items={paperItems}
               onItemFeedback={handleItemFeedback}
               user={user}
+              project_id={project_id}
+              query_id={query_id}
             />
           </div>
         </div>
