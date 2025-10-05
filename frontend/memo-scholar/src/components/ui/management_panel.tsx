@@ -35,7 +35,7 @@ export function ManagementPanel({
   };
 
   const renderItem = (item: Item, type: 'liked' | 'disliked') => (
-    <Card key={item.id} className="mb-3 transition-all duration-200 bg-zinc-900/60 shadow-xl shadow-black border-zinc-800/50">
+    <Card key={`${type}-${item.database_id || item.id}`} className="mb-3 transition-all duration-200 bg-zinc-900/60 shadow-xl shadow-black border-zinc-800/50">
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">

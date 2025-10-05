@@ -251,7 +251,7 @@ export function Panel({
           ) : (
             items.map((it) => (
             <motion.div
-              key={it.id}
+              key={`panel-${kind}-${it.id}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{
                 opacity: 1,

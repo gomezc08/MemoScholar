@@ -99,3 +99,22 @@ def update_like_dislike():
             'error': str(e),
             'success': False
         }), 500
+
+@like_dislike_bp.route('/api/projects/<int:project_id>/likes', methods=['GET'])
+def get_project_likes(project_id):
+    """
+    Get all likes/dislikes for a specific project.
+    """
+    try:
+        likes = TaskManager().handle_get_likes_for_project(project_id)
+        
+        return jsonify({
+            'success': True,
+            'likes': likes
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500

@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HeaderBar } from "@/components/ui/header_bar";
 import SimpleLogin from "@/components/ui/simple-login";
-import { generateSubmission } from "@/lib/api";
-import type { Item, UserProfile } from "@/types";
+import ConversationsSidebar from "@/components/ui/conversations-sidebar";
+import { generateSubmission, getCompleteProjectData } from "@/lib/api";
+import type { Item, UserProfile, DatabaseProject } from "@/types";
 
 interface ProjectProps {
   onProjectComplete: (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[], project_id: number, query_id: number) => void;
@@ -21,6 +22,93 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
   const [guidelines, setGuidelines] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [validationError, setValidationError] = useState<string>("");
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+
+  const handleProjectSelect = async (project: DatabaseProject) => {
+    // Load the complete project data and navigate to the next screen
+    try {
+      const completeData = await getCompleteProjectData(project.project_id);
+      
+      // Transform YouTube videos to Item format
+      const youtubeItems: Item[] = completeData.youtube_videos.map((video: any) => ({
+        id: video.youtube_id,
+        title: video.video_title,
+        database_id: video.youtube_id,
+        target_type: "youtube" as const,
+        project_id: project.project_id,
+        liked_disliked_id: undefined, // Will be set from likes data
+        meta: {
+          channel: "YouTube",
+          duration: video.video_duration,
+          views: video.video_views,
+          likes: video.video_likes,
+          video_url: video.video_url
+        },
+        feedback: undefined as "accept" | "reject" | undefined
+      }));
+
+      // Transform papers to Item format
+      const paperItems: Item[] = completeData.papers.map((paper: any) => ({
+        id: paper.paper_id,
+        title: paper.paper_title,
+        database_id: paper.paper_id,
+        target_type: "paper" as const,
+        project_id: project.project_id,
+        liked_disliked_id: undefined, // Will be set from likes data
+        meta: {
+          venue: "ArXiv",
+          year: paper.published_year,
+          authors: paper.authors ? paper.authors.map((a: any) => a.name).join(', ') : 'Unknown',
+          link: paper.pdf_link,
+          pdf_link: paper.pdf_link,
+          summary: paper.paper_summary
+        },
+        feedback: undefined as "accept" | "reject" | undefined
+      }));
+
+      // Apply likes to items - use the most recent like record for each item
+      console.log('Applying likes from database:', completeData.likes);
+      
+      // Group likes by target (target_type + target_id) and keep only the most recent one
+      const latestLikes = new Map();
+      completeData.likes.forEach((like: any) => {
+        const key = `${like.target_type}-${like.target_id}`;
+        if (!latestLikes.has(key) || like.liked_disliked_id > latestLikes.get(key).liked_disliked_id) {
+          latestLikes.set(key, like);
+        }
+      });
+      
+      // Apply the latest likes
+      latestLikes.forEach((like: any) => {
+        const items = like.target_type === 'youtube' ? youtubeItems : paperItems;
+        const item = items.find(i => i.database_id === like.target_id);
+        if (item) {
+          console.log(`Applying like to item ${item.database_id}: isLiked=${like.isLiked}, liked_disliked_id=${like.liked_disliked_id}`);
+          item.liked_disliked_id = like.liked_disliked_id;
+          item.feedback = like.isLiked ? "accept" : "reject";
+        } else {
+          console.log(`No item found for like: target_type=${like.target_type}, target_id=${like.target_id}`);
+        }
+      });
+
+      // Get the first query_id (most projects should have at least one query)
+      const queryId = completeData.queries.length > 0 ? completeData.queries[0].query_id : 0;
+      
+      // Navigate to the next screen with complete data
+      onProjectComplete(
+        project.topic,
+        project.objective,
+        project.guidelines,
+        youtubeItems,
+        paperItems,
+        project.project_id,
+        queryId
+      );
+    } catch (error) {
+      console.error('Failed to load project data:', error);
+      setValidationError("Failed to load project data. Please try again.");
+    }
+  };
 
   const onRun = async () => {
     // Clear previous validation errors
@@ -183,28 +271,62 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white">
+      {/* Sidebar - only show if user is logged in */}
+      {user && (
+        <ConversationsSidebar
+          user={user}
+          onProjectSelect={handleProjectSelect}
+          isHovered={isSidebarHovered}
+          onMouseEnter={() => setIsSidebarHovered(true)}
+          onMouseLeave={() => setIsSidebarHovered(false)}
+        />
+      )}
+      
       <HeaderBar />
       
-      {/* Simple Login Section */}
-      <div className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-400">Welcome to MemoScholar</span>
-            {user && (
+      {/* Hoverable trigger section that replaces welcome section */}
+      {user && (
+        <div 
+          className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800 cursor-pointer hover:bg-zinc-800 transition-colors"
+          onMouseEnter={() => setIsSidebarHovered(true)}
+          onMouseLeave={() => setIsSidebarHovered(false)}
+        >
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-400">Click or hover to view past conversations</span>
               <span className="text-sm text-pink-400">
                 • Signed in as {user.name}
               </span>
-            )}
+            </div>
+            <SimpleLogin 
+              onLogin={onUserLogin}
+              onLogout={onUserLogout}
+              user={user}
+            />
           </div>
-          <SimpleLogin 
-            onLogin={onUserLogin}
-            onLogout={onUserLogout}
-            user={user}
-          />
         </div>
-      </div>
+      )}
+      
+      {/* Show regular welcome section if not logged in */}
+      {!user && (
+        <div className="w-full px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-400">Welcome to MemoScholar</span>
+            </div>
+            <SimpleLogin 
+              onLogin={onUserLogin}
+              onLogout={onUserLogout}
+              user={user}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
 
-      <main className="flex-1 w-full px-8 py-12">
+        <main className="flex-1 w-full px-8 py-12">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-white mb-4">Enter Your Project Details Below</h1>
@@ -264,7 +386,8 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
             </div>
           </div>
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
