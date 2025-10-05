@@ -431,7 +431,7 @@ class DBSelect:
             """
             self.connector.cursor.execute(query, (project_id,))
             results = self.connector.cursor.fetchall()
-            return [
+            likes = [
                 {
                     'liked_disliked_id': row[0],
                     'project_id': row[1],
@@ -441,6 +441,22 @@ class DBSelect:
                 }
                 for row in results
             ]
+            
+            # Debug: Check for duplicate likes for the same item
+            target_counts = {}
+            for like in likes:
+                key = f"{like['target_type']}-{like['target_id']}"
+                target_counts[key] = target_counts.get(key, 0) + 1
+            
+            duplicates = {k: v for k, v in target_counts.items() if v > 1}
+            if duplicates:
+                print(f"WARNING: Found duplicate likes for items: {duplicates}")
+                for like in likes:
+                    key = f"{like['target_type']}-{like['target_id']}"
+                    if target_counts[key] > 1:
+                        print(f"  Duplicate: {key} - liked_disliked_id: {like['liked_disliked_id']}, isLiked: {like['isLiked']}")
+            
+            return likes
         except Exception as e:
             print(f"get_likes_for_project error: {e}")
             return []

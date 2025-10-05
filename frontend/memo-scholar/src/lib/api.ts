@@ -1,7 +1,7 @@
 import type { CompleteProjectData, DatabaseUser, DatabaseProject } from '../types';
 
 export async function generateSubmission(topic: string, objective: string, guidelines: string, user_id: number) {
-  const payload = { topic, objective, guidelines, user_id };
+  const payload = { topic, objective, guidelines, user_id: user_id.toString() };
   const res = await fetch("/api/generate_submission/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -12,13 +12,17 @@ export async function generateSubmission(topic: string, objective: string, guide
 }
 
 export async function generateSubmissionIndividualPanel(topic: string, objective: string, guidelines: string, user_special_instructions: string, panel_name: string, user_id: number, project_id: number, query_id: number) {
-  const payload = { topic, objective, guidelines, user_special_instructions, panel_name, user_id, project_id, query_id };
+  const payload = { topic, objective, guidelines, user_special_instructions, panel_name, user_id: user_id.toString(), project_id, query_id };
   const res = await fetch("/api/generate_submission/individual_panel/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Generate submission individual panel failed");
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error(`Failed to generate individual panel: ${res.status} ${res.statusText}`, errorText);
+    throw new Error(`Generate submission individual panel failed: ${res.status} ${res.statusText}`);
+  }
   return res.json();
 }
 
@@ -64,8 +68,14 @@ export async function getCompleteProjectData(projectId: number): Promise<Complet
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error("Failed to get complete project data");
-  return res.json();
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error(`Failed to get complete project data: ${res.status} ${res.statusText}`, errorText);
+    throw new Error(`Failed to get complete project data: ${res.status} ${res.statusText}`);
+  }
+  const response = await res.json();
+  console.log('Complete project data response:', response);
+  return response;
 }
 
 export async function getUser(userId: number): Promise<DatabaseUser> {
@@ -112,5 +122,15 @@ export async function createUser(name: string, email: string): Promise<{ success
   });
   if (!res.ok) throw new Error("Failed to create user");
   return res.json();
+}
+
+export async function getProjectLikes(projectId: number): Promise<any[]> {
+  const res = await fetch(`/api/projects/${projectId}/likes`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to get project likes");
+  const response = await res.json();
+  return response.likes || [];
 }
 

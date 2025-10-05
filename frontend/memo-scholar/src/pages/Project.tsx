@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { HeaderBar } from "@/components/ui/header_bar";
 import SimpleLogin from "@/components/ui/simple-login";
 import ConversationsSidebar from "@/components/ui/conversations-sidebar";
-import { generateSubmission } from "@/lib/api";
+import { generateSubmission, getCompleteProjectData } from "@/lib/api";
 import type { Item, UserProfile, DatabaseProject } from "@/types";
 
 interface ProjectProps {
@@ -25,22 +25,88 @@ export default function Project({ onProjectComplete, user, onUserLogin, onUserLo
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
 
   const handleProjectSelect = async (project: DatabaseProject) => {
-    // Navigate to the next screen with the project data
-    // We'll call onProjectComplete with empty arrays for now since we don't have the complete data
-    // The next screen can load the complete data if needed
+    // Load the complete project data and navigate to the next screen
     try {
+      const completeData = await getCompleteProjectData(project.project_id);
+      
+      // Transform YouTube videos to Item format
+      const youtubeItems: Item[] = completeData.youtube_videos.map((video: any) => ({
+        id: video.youtube_id,
+        title: video.video_title,
+        database_id: video.youtube_id,
+        target_type: "youtube" as const,
+        project_id: project.project_id,
+        liked_disliked_id: undefined, // Will be set from likes data
+        meta: {
+          channel: "YouTube",
+          duration: video.video_duration,
+          views: video.video_views,
+          likes: video.video_likes,
+          video_url: video.video_url
+        },
+        feedback: undefined as "accept" | "reject" | undefined
+      }));
+
+      // Transform papers to Item format
+      const paperItems: Item[] = completeData.papers.map((paper: any) => ({
+        id: paper.paper_id,
+        title: paper.paper_title,
+        database_id: paper.paper_id,
+        target_type: "paper" as const,
+        project_id: project.project_id,
+        liked_disliked_id: undefined, // Will be set from likes data
+        meta: {
+          venue: "ArXiv",
+          year: paper.published_year,
+          authors: paper.authors ? paper.authors.map((a: any) => a.name).join(', ') : 'Unknown',
+          link: paper.pdf_link,
+          pdf_link: paper.pdf_link,
+          summary: paper.paper_summary
+        },
+        feedback: undefined as "accept" | "reject" | undefined
+      }));
+
+      // Apply likes to items - use the most recent like record for each item
+      console.log('Applying likes from database:', completeData.likes);
+      
+      // Group likes by target (target_type + target_id) and keep only the most recent one
+      const latestLikes = new Map();
+      completeData.likes.forEach((like: any) => {
+        const key = `${like.target_type}-${like.target_id}`;
+        if (!latestLikes.has(key) || like.liked_disliked_id > latestLikes.get(key).liked_disliked_id) {
+          latestLikes.set(key, like);
+        }
+      });
+      
+      // Apply the latest likes
+      latestLikes.forEach((like: any) => {
+        const items = like.target_type === 'youtube' ? youtubeItems : paperItems;
+        const item = items.find(i => i.database_id === like.target_id);
+        if (item) {
+          console.log(`Applying like to item ${item.database_id}: isLiked=${like.isLiked}, liked_disliked_id=${like.liked_disliked_id}`);
+          item.liked_disliked_id = like.liked_disliked_id;
+          item.feedback = like.isLiked ? "accept" : "reject";
+        } else {
+          console.log(`No item found for like: target_type=${like.target_type}, target_id=${like.target_id}`);
+        }
+      });
+
+      // Get the first query_id (most projects should have at least one query)
+      const queryId = completeData.queries.length > 0 ? completeData.queries[0].query_id : 0;
+      
+      // Navigate to the next screen with complete data
       onProjectComplete(
         project.topic,
         project.objective,
         project.guidelines,
-        [], // Empty YouTube items for now
-        [], // Empty paper items for now
+        youtubeItems,
+        paperItems,
         project.project_id,
-        0 // Default query_id, can be updated later
+        queryId
       );
     } catch (error) {
-      console.error('Failed to navigate to project:', error);
-      setValidationError("Failed to load project. Please try again.");
+      console.error('Failed to load project data:', error);
+      setValidationError("Failed to load project data. Please try again.");
     }
   };
 

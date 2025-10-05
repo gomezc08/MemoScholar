@@ -81,3 +81,25 @@ def get_user_projects(user_id):
             'error': str(e),
             'success': False
         }), 500
+
+@user_bp.route('/api/projects/<int:project_id>/complete', methods=['GET'])
+def get_complete_project_data(project_id):
+    """
+    Get complete project data including project, queries, papers, youtube videos, and likes.
+    """
+    try:
+        complete_data = TaskManager().handle_get_complete_project_data(project_id)
+        return jsonify({
+            'success': True,
+            'project': complete_data['project'],
+            'queries': complete_data['queries'],
+            'papers': complete_data['papers'],
+            'youtube_videos': complete_data['youtube_videos'],
+            'likes': complete_data['likes']
+        }), 200
+    except Exception as e:
+        logger.error(f"Exception in get_complete_project_data: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500

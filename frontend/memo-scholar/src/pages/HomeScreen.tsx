@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Download, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
@@ -39,6 +39,51 @@ export default function HomeScreen({
   const [likedItems, setLikedItems] = useState<Item[]>([]);
   const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Populate liked and disliked items from the passed data
+  useEffect(() => {
+    const liked: Item[] = [];
+    const disliked: Item[] = [];
+
+    console.log('Categorizing items - YouTube items:', youtubeItems);
+    console.log('Categorizing items - Paper items:', paperItems);
+
+    // Check YouTube items
+    youtubeItems.forEach(item => {
+      console.log(`YouTube item ${item.database_id}: feedback=${item.feedback}`);
+      if (item.feedback === 'accept') {
+        liked.push(item);
+      } else if (item.feedback === 'reject') {
+        disliked.push(item);
+      }
+    });
+
+    // Check Paper items
+    paperItems.forEach(item => {
+      console.log(`Paper item ${item.database_id}: feedback=${item.feedback}`);
+      if (item.feedback === 'accept') {
+        liked.push(item);
+      } else if (item.feedback === 'reject') {
+        disliked.push(item);
+      }
+    });
+
+    console.log('Final liked items:', liked.map(i => `${i.database_id}:${i.feedback}`));
+    console.log('Final disliked items:', disliked.map(i => `${i.database_id}:${i.feedback}`));
+
+    // Ensure no item appears in both arrays (safety check)
+    const likedIds = new Set(liked.map(i => i.database_id || i.id));
+    const finalDisliked = disliked.filter(i => !likedIds.has(i.database_id || i.id));
+    
+    console.log('After deduplication - liked:', liked.length, 'disliked:', finalDisliked.length);
+
+    setLikedItems(liked);
+    setDislikedItems(finalDisliked);
+  }, [youtubeItems, paperItems]);
+
+  // Filter items to only show those without feedback in the main panels
+  const youtubeItemsWithoutFeedback = youtubeItems.filter(item => !item.feedback);
+  const paperItemsWithoutFeedback = paperItems.filter(item => !item.feedback);
 
   const onSavePDF = () => window.print();
   
@@ -205,7 +250,7 @@ export default function HomeScreen({
               topic={topic} 
               objective={objective} 
               guidelines={guidelines}
-              items={youtubeItems}
+              items={youtubeItemsWithoutFeedback}
               onItemFeedback={handleItemFeedback}
               user={user}
               project_id={project_id}
@@ -218,7 +263,7 @@ export default function HomeScreen({
               topic={topic} 
               objective={objective} 
               guidelines={guidelines}
-              items={paperItems}
+              items={paperItemsWithoutFeedback}
               onItemFeedback={handleItemFeedback}
               user={user}
               project_id={project_id}

@@ -38,9 +38,13 @@ class TaskManager:
                 project_id = data['project_id']
                 query_id = data['query_id']
                 
-                # Validate that the project and query exist
-                if not project_id or not query_id:
-                    raise ValueError("Project ID and Query ID are required for panel-specific submissions")
+                # Validate that the project exists
+                if project_id is None:
+                    raise ValueError("Project ID is required for panel-specific submissions")
+                
+                # If query_id is 0 or None, create a default query
+                if query_id is None or query_id == 0:
+                    query_id = self._handle_default_query_task(data, project_id)
             
             # Handle content generation based on panel type
             if panel_name in ['Generic', 'Papers']:
@@ -265,6 +269,58 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_user_projects: {str(e)}")
             raise RuntimeError(f"Failed to get user projects: {str(e)}")
+
+    def handle_get_likes_for_project(self, project_id):
+        """
+        Get all likes for a project by project_id.
+        Returns list of likes or raises exception on failure.
+        """
+        try:
+            # Validate project_id
+            if not project_id or project_id <= 0:
+                raise ValueError("Invalid project_id provided")
+            
+            # Get likes for project
+            likes = self.db_select.get_likes_for_project(project_id)
+            
+            if likes is None:
+                raise RuntimeError("Failed to retrieve likes from database")
+            
+            self.logger.info(f"Retrieved {len(likes)} likes for project ID: {project_id}")
+            return likes
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_likes_for_project: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_likes_for_project: {str(e)}")
+            raise RuntimeError(f"Failed to get likes for project: {str(e)}")
+
+    def handle_get_complete_project_data(self, project_id):
+        """
+        Get complete project data including project, queries, papers, youtube videos, and likes.
+        Returns complete project data or raises exception on failure.
+        """
+        try:
+            # Validate project_id
+            if not project_id or project_id <= 0:
+                raise ValueError("Invalid project_id provided")
+            
+            # Get complete project data
+            complete_data = self.db_select.get_complete_project_data(project_id)
+            
+            if complete_data is None:
+                raise RuntimeError("Failed to retrieve project data from database")
+            
+            self.logger.info(f"Retrieved complete data for project ID: {project_id}")
+            return complete_data
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_complete_project_data: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_complete_project_data: {str(e)}")
+            raise RuntimeError(f"Failed to get complete project data: {str(e)}")
 
     
     def _handle_project_task(self, data):
