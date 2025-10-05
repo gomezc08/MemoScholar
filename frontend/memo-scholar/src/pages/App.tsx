@@ -12,6 +12,8 @@ export default function App() {
     guidelines: string;
     youtubeItems: Item[];
     paperItems: Item[];
+    project_id: number;
+    query_id: number;
   } | null>(null);
 
   // Load user from localStorage on app start
@@ -36,13 +38,15 @@ export default function App() {
     }
   }, [user]);
 
-  const handleProjectComplete = (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[]) => {
+  const handleProjectComplete = (topic: string, objective: string, guidelines: string, youtubeItems: Item[], paperItems: Item[], project_id: number, query_id: number) => {
     setProjectData({
       topic,
       objective,
       guidelines,
       youtubeItems,
-      paperItems
+      paperItems,
+      project_id,
+      query_id
     });
     setHasRun(true);
   };
@@ -71,6 +75,8 @@ export default function App() {
       guidelines={projectData.guidelines}
       youtubeItems={projectData.youtubeItems}
       paperItems={projectData.paperItems}
+      project_id={projectData.project_id}
+      query_id={projectData.query_id}
       onBackToSetup={handleBackToSetup}
       user={user}
       onUserLogin={handleUserLogin}

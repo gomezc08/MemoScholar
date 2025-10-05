@@ -41,6 +41,7 @@ def generate_submission():
         return jsonify({
             'success': True,
             'project_id': task_manager_response['project_id'],
+            'query_id': task_manager_response['query_id'],
             'youtube': task_manager_response['youtube'],
             'papers': task_manager_response['papers']
         }), 200
@@ -60,11 +61,20 @@ def generate_submission_individual_panel():
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['topic', 'objective', 'guidelines', 'user_special_instructions', 'panel_name', 'user_id']
-        for field in required_fields:
+        string_fields = ['topic', 'objective', 'guidelines', 'user_special_instructions', 'panel_name', 'user_id']
+        for field in string_fields:
             if field not in data or not data[field] or (isinstance(data[field], str) and data[field].strip() == ''):
                 return jsonify({
                     'error': f'Missing or empty required field: {field}',
+                    'success': False
+                }), 400
+        
+        # Validate ID fields
+        id_fields = ['project_id', 'query_id']
+        for field in id_fields:
+            if field not in data or data[field] is None:
+                return jsonify({
+                    'error': f'Missing required field: {field}',
                     'success': False
                 }), 400
         

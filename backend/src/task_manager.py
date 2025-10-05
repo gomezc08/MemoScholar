@@ -31,11 +31,13 @@ class TaskManager:
                 project_id = self._handle_project_task(data)
                 query_id = self._handle_default_query_task(data, project_id)
                 result['project_id'] = project_id
+                result['query_id'] = query_id
             else:
-                # For panel-specific submissions, get existing project/query
-                project_id = self.db_select.get_project_id(data['project_id'])
-                query_id = self.db_select.get_query_id(data['query_id'])
+                # For panel-specific submissions, use provided project/query IDs
+                project_id = data['project_id']
+                query_id = data['query_id']
                 
+                # Validate that the project and query exist
                 if not project_id or not query_id:
                     raise ValueError("Project ID and Query ID are required for panel-specific submissions")
             
