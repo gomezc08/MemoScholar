@@ -30,7 +30,7 @@ def create_user():
                 }), 400
         
         # Sign up/login user
-        user = TaskManager().handle_user_creation(data)
+        user = TaskManager().handle_user_signup(data)
         return jsonify({
             'success': True,
             'user_id': user['user_id'],
@@ -50,23 +50,13 @@ def get_user(user_id):
     Get user information by user_id.
     """
     try:
-        from ..db.db_crud.select_db import DBSelect
-        db_select = DBSelect()
-        user = db_select.get_user(user_id)
-        
-        if user:
-            return jsonify({
-                'success': True,
-                'user_id': user['user_id'],
-                'name': user['name'],
-                'email': user['email']
-            }), 200
-        else:
-            return jsonify({
-                'error': 'User not found',
-                'success': False
-            }), 404
-            
+        user = TaskManager().handle_get_user(user_id)
+        return jsonify({
+            'success': True,
+            'user_id': user['user_id'],
+            'name': user['name'],
+            'email': user['email']
+        }), 200
     except Exception as e:
         logger.error(f"Exception in get_user: {str(e)}")
         return jsonify({

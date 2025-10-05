@@ -136,41 +136,136 @@ class TaskManager:
             self.logger.error(f"Unexpected error in handle_like_dislike_update: {str(e)}")
             raise RuntimeError(f"Failed to update like/dislike record: {str(e)}")
     
-    def handle_user_creation(self, data):
+    def handle_user_signup(self, data):
         """
         Create a new user in the database.
-        Returns user ID or raises exception on failure.
+        Returns user data or raises exception on failure.
         """
-        
-        existing_user = self.db_select.get_user_by_email(data['email'].strip().lower())
-        
-        if existing_user:
-            # User already exists, return existing user info
-            self.logger.info(f"User already exists with ID: {existing_user['user_id']}")
-            return {
-                'success': True,
-                'user_id': existing_user['user_id'],
-                'name': existing_user['name'],
-                'email': existing_user['email']
-            }
-        
-        # Create new user
-        user_id = self.db_insert.create_user(data['name'].strip(), data['email'].strip().lower())
-        
-        if user_id:
+        try:
+            # Validate required fields
+            required_fields = ['name', 'email']
+            for field in required_fields:
+                if field not in data:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Check if user already exists
+            existing_user = self.db_select.get_user_by_email(data['email'].strip().lower())
+            
+            if existing_user:
+                # User already exists, return existing user info
+                self.logger.info(f"User already exists with ID: {existing_user['user_id']}")
+                return {
+                    'user_id': existing_user['user_id'],
+                    'name': existing_user['name'],
+                    'email': existing_user['email']
+                }
+            
+            # Create new user
+            user_id = self.db_insert.create_user(data['name'].strip(), data['email'].strip().lower())
+            
+            if user_id is None:
+                raise RuntimeError("Failed to create user in database")
+            
             self.logger.info(f"Successfully created user with ID: {user_id}")
             return {
-                'success': True,
                 'user_id': user_id,
                 'name': data['name'].strip(),
                 'email': data['email'].strip().lower()
             }
-        else:
-            self.logger.error("User creation failed")
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_user_signup: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_user_signup: {str(e)}")
+            raise RuntimeError(f"Failed to handle user signup: {str(e)}")
+    
+    def handle_user_login(self, data):
+        """
+        Login a user by email.
+        Returns user data or raises exception on failure.
+        """
+        try:
+            # Validate required fields
+            if 'email' not in data:
+                raise ValueError("Missing required field: email")
+            
+            # Get user by email
+            user = self.db_select.get_user_by_email(data['email'].strip().lower())
+            
+            if not user:
+                raise ValueError("User not found with this email")
+            
+            self.logger.info(f"User login successful for ID: {user['user_id']}")
             return {
-                'error': 'User creation failed',
-                'success': False
+                'user_id': user['user_id'],
+                'name': user['name'],
+                'email': user['email']
             }
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_user_login: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_user_login: {str(e)}")
+            raise RuntimeError(f"Failed to handle user login: {str(e)}")
+    
+    def handle_get_user(self, user_id):
+        """
+        Get user information by user_id.
+        Returns user data or raises exception on failure.
+        """
+        try:
+            # Validate user_id
+            if not user_id or user_id <= 0:
+                raise ValueError("Invalid user_id provided")
+            
+            # Get user by user_id
+            user = self.db_select.get_user(user_id)
+            
+            if not user:
+                raise ValueError("User not found with this ID")
+            
+            self.logger.info(f"Retrieved user with ID: {user['user_id']}")
+            return {
+                'user_id': user['user_id'],
+                'name': user['name'],
+                'email': user['email']
+            }
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_user: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_user: {str(e)}")
+            raise RuntimeError(f"Failed to get user: {str(e)}")
+    
+    def handle_user_projects(self, user_id):
+        """
+        Get all projects for a user by user_id.
+        Returns list of projects or raises exception on failure.
+        """
+        try:
+            # Validate user_id
+            if not user_id or user_id <= 0:
+                raise ValueError("Invalid user_id provided")
+            
+            # Get projects for user
+            projects = self.db_select.get_user_projects(user_id)
+            
+            if projects is None:
+                raise RuntimeError("Failed to retrieve projects from database")
+            
+            self.logger.info(f"Retrieved {len(projects)} projects for user ID: {user_id}")
+            return projects
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_user_projects: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_user_projects: {str(e)}")
+            raise RuntimeError(f"Failed to get user projects: {str(e)}")
+
     
     def _handle_project_task(self, data):
         """
