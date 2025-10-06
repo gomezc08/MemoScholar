@@ -16,6 +16,7 @@ interface HomeScreenProps {
   project_id: number;
   query_id: number;
   onBackToSetup: () => void;
+  onItemsUpdate?: (youtubeItems: Item[], paperItems: Item[]) => void;
   user: UserProfile | null;
   onUserLogin: (user: UserProfile) => void;
   onUserLogout: () => void;
@@ -30,6 +31,7 @@ export default function HomeScreen({
   project_id,
   query_id,
   onBackToSetup,
+  onItemsUpdate,
   user,
   onUserLogin,
   onUserLogout
@@ -284,6 +286,11 @@ export default function HomeScreen({
               guidelines={guidelines}
               items={youtubeItemsWithoutFeedback}
               onItemFeedback={handleItemFeedback}
+              onItemsUpdate={(newItems) => {
+                if (onItemsUpdate) {
+                  onItemsUpdate(newItems, paperItems);
+                }
+              }}
               user={user}
               project_id={project_id}
               query_id={query_id}
@@ -297,6 +304,11 @@ export default function HomeScreen({
               guidelines={guidelines}
               items={paperItemsWithoutFeedback}
               onItemFeedback={handleItemFeedback}
+              onItemsUpdate={(newItems) => {
+                if (onItemsUpdate) {
+                  onItemsUpdate(youtubeItems, newItems);
+                }
+              }}
               user={user}
               project_id={project_id}
               query_id={query_id}
