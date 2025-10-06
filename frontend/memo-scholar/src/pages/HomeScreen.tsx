@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
@@ -38,7 +37,7 @@ export default function HomeScreen({
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [likedItems, setLikedItems] = useState<Item[]>([]);
   const [dislikedItems, setDislikedItems] = useState<Item[]>([]);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [] = useState(false);
 
   // Helper to build a stable composite identity across types
   const getItemKey = (it: Item) => `${it.target_type || 'unknown'}-${it.database_id ?? it.id}`;
@@ -132,11 +131,6 @@ export default function HomeScreen({
   const paperItemsWithoutFeedback = paperItems.filter(item => !item.feedback);
   
   const handleBackToSetup = () => {
-    setShowConfirmDialog(true);
-  };
-  
-  const confirmBackToSetup = () => {
-    setShowConfirmDialog(false);
     onBackToSetup();
   };
 
@@ -326,36 +320,6 @@ export default function HomeScreen({
         onRemoveItem={handleRemoveItem}
         onMoveItem={handleMoveItem}
       />
-
-      {/* Confirmation Dialog */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-zinc-900 p-6 rounded-lg shadow-xl border border-zinc-800 max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="h-6 w-6 text-pink-500" />
-              <h3 className="text-lg font-semibold text-white">Confirm Action</h3>
-            </div>
-            <p className="text-zinc-300 mb-6">
-              Are you sure you want to go back to setup? All your current work including liked/disliked items will be lost and you'll need to regenerate the content.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowConfirmDialog(false)}
-                className="hover:border-pink-500"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={confirmBackToSetup}
-                className="bg-pink-500 hover:bg-pink-600 hover:border-pink-500"
-              >
-                Yes, Go Back
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
