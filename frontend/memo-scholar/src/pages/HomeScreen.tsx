@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Download, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
@@ -130,8 +130,6 @@ export default function HomeScreen({
   // This avoids wiping regenerated items due to external liked/disliked state
   const youtubeItemsWithoutFeedback = youtubeItems.filter(item => !item.feedback);
   const paperItemsWithoutFeedback = paperItems.filter(item => !item.feedback);
-
-  const onSavePDF = () => window.print();
   
   const handleBackToSetup = () => {
     setShowConfirmDialog(true);
@@ -319,10 +317,6 @@ export default function HomeScreen({
           </div>
         </div>
       </main>
-
-      <Button onClick={onSavePDF} className="fixed bottom-5 right-5 shadow-lg" size="lg">
-        <Download className="h-4 w-4 mr-2" /> Save as PDF
-      </Button>
 
       <ManagementPanel
         isOpen={isManagementOpen}
