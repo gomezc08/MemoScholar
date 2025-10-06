@@ -41,7 +41,7 @@ export function ManagementPanel({
           <div className="flex-1 min-w-0">
             <h4 className="font-medium text-sm mb-1 truncate text-white">{item.title}</h4>
             <p className="text-xs text-zinc-400 mb-2">{formatMeta(item)}</p>
-            <Badge variant={type === 'liked' ? 'default' : 'destructive'} className="text-xs">
+            <Badge variant={type === 'liked' ? 'secondary' : 'destructive'} className={`text-xs ${type === 'liked' ? 'bg-green-100 text-green-800 border-green-200' : ''}`}>
               {type === 'liked' ? 'Liked' : 'Disliked'}
             </Badge>
           </div>
