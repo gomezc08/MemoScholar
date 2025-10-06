@@ -126,17 +126,10 @@ export default function HomeScreen({
     setDislikedItems(finalDisliked);
   }, [youtubeItems, paperItems]);
 
-  // Filter panel items by excluding anything already in liked/disliked (via composite key)
-  const likedKeysSet = new Set(likedItems.map(getItemKey));
-  const dislikedKeysSet = new Set(dislikedItems.map(getItemKey));
-  const youtubeItemsWithoutFeedback = youtubeItems.filter(item => {
-    const key = getItemKey(item);
-    return !likedKeysSet.has(key) && !dislikedKeysSet.has(key);
-  });
-  const paperItemsWithoutFeedback = paperItems.filter(item => {
-    const key = getItemKey(item);
-    return !likedKeysSet.has(key) && !dislikedKeysSet.has(key);
-  });
+  // Show only items without feedback based on incoming item.feedback
+  // This avoids wiping regenerated items due to external liked/disliked state
+  const youtubeItemsWithoutFeedback = youtubeItems.filter(item => !item.feedback);
+  const paperItemsWithoutFeedback = paperItems.filter(item => !item.feedback);
 
   const onSavePDF = () => window.print();
   
