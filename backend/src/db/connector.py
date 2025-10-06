@@ -35,8 +35,3 @@ class Connector:
             print("CLOSED CONNECTION TO MYSQL")
         else:
             print("NO CONNECTION TO MYSQL")
-    
-if __name__ == '__main__':
-    conn = Connector()
-    conn.open_connection()
-    conn.close_connection()

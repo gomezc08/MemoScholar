@@ -34,41 +34,65 @@ export function ManagementPanel({
     return '';
   };
 
-  const renderItem = (item: Item, type: 'liked' | 'disliked') => (
-    <Card key={`${type}-${item.target_type}-${item.database_id || item.id}`} className="mb-3 transition-all duration-200 bg-zinc-900/60 shadow-xl shadow-black border-zinc-800/50">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-sm mb-1 truncate text-white">{item.title}</h4>
-            <p className="text-xs text-zinc-400 mb-2">{formatMeta(item)}</p>
-            <Badge variant={type === 'liked' ? 'default' : 'destructive'} className="text-xs">
-              {type === 'liked' ? 'Liked' : 'Disliked'}
-            </Badge>
+  const renderItem = (item: Item, type: 'liked' | 'disliked') => {
+    const getItemUrl = (item: Item) => {
+      if (item.target_type === 'youtube' && item.meta.video_url) {
+        return item.meta.video_url;
+      } else if (item.target_type === 'paper') {
+        return item.meta.pdf_link || item.meta.link;
+      }
+      return null;
+    };
+
+    const itemUrl = getItemUrl(item);
+
+    return (
+      <Card key={`${type}-${item.target_type}-${item.database_id || item.id}`} className="mb-3 transition-all duration-200 bg-zinc-900/60 shadow-xl shadow-black border-zinc-800/50">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              {itemUrl ? (
+                <a 
+                  href={itemUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="font-medium text-sm mb-1 truncate text-white hover:text-blue-400 transition-colors block"
+                >
+                  {item.title}
+                </a>
+              ) : (
+                <h4 className="font-medium text-sm mb-1 truncate text-white">{item.title}</h4>
+              )}
+              <p className="text-xs text-zinc-400 mb-2">{formatMeta(item)}</p>
+              <Badge variant={type === 'liked' ? 'secondary' : 'destructive'} className={`text-xs ${type === 'liked' ? 'bg-green-100 text-green-800 border-green-200' : ''}`}>
+                {type === 'liked' ? 'Liked' : 'Disliked'}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-1 ml-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onMoveItem(item.id, type, type === 'liked' ? 'disliked' : 'liked')}
+                className="h-8 w-8 p-0 text-zinc-700 hover:text-blue-500 transition-colors rounded-full"
+                title={`Move to ${type === 'liked' ? 'Disliked' : 'Liked'}`}
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRemoveItem(item.id, type)}
+                className="h-8 w-8 p-0 text-zinc-700 hover:text-destructive transition-colors rounded-full"
+                title="Remove item"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1 ml-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onMoveItem(item.id, type, type === 'liked' ? 'disliked' : 'liked')}
-              className="h-8 w-8 p-0 text-zinc-700 hover:text-blue-500 transition-colors rounded-full"
-              title={`Move to ${type === 'liked' ? 'Disliked' : 'Liked'}`}
-            >
-              <ArrowRightLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onRemoveItem(item.id, type)}
-              className="h-8 w-8 p-0 text-zinc-700 hover:text-destructive transition-colors rounded-full"
-              title="Remove item"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <>

@@ -37,11 +37,3 @@ class DBChange:
             return False
         finally:
             self.connector.close_connection()
-    
-if __name__ == "__main__":
-    db_change = DBChange()
-
-    print("Updating like...")
-    db_change.update_like(2)
-
-    print("✅ Test run finished. Check your DB for updated rows.")
