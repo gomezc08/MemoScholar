@@ -198,6 +198,8 @@ export function Panel({
       }
       
       // Remove item after successful API call with delay for dissolve effect
+      // Note: The parent component (HomeScreen) will handle the state management
+      // We remove from local panel state but the parent will sync from server
       setTimeout(() => {
         setItems(prev => prev.filter(it => it.id !== id));
       }, 800);

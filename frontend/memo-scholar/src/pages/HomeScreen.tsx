@@ -79,86 +79,75 @@ export default function HomeScreen({
     }
   };
 
-  // Initial and project/content change sync
+  // Single effect to handle server sync and item categorization
   useEffect(() => {
+    // First, try to rebuild from server likes (this is the source of truth)
     rebuildFromLikes();
   }, [project_id, youtubeItems, paperItems]);
 
-  // Populate liked and disliked items from the passed data
-  useEffect(() => {
-    const liked: Item[] = [];
-    const disliked: Item[] = [];
+  // Show only items without feedback AND not already in liked/disliked lists
+  // This ensures items don't appear in both panels and management panel
+  const getLikedDislikedKeys = () => {
+    const likedKeys = new Set(likedItems.map(getItemKey));
+    const dislikedKeys = new Set(dislikedItems.map(getItemKey));
+    return new Set([...likedKeys, ...dislikedKeys]);
+  };
 
-    console.log('Categorizing items - YouTube items:', youtubeItems);
-    console.log('Categorizing items - Paper items:', paperItems);
-
-    // Check YouTube items
-    youtubeItems.forEach(item => {
-      console.log(`YouTube item ${item.database_id}: feedback=${item.feedback}`);
-      if (item.feedback === 'accept') {
-        liked.push(item);
-      } else if (item.feedback === 'reject') {
-        disliked.push(item);
-      }
-    });
-
-    // Check Paper items
-    paperItems.forEach(item => {
-      console.log(`Paper item ${item.database_id}: feedback=${item.feedback}`);
-      if (item.feedback === 'accept') {
-        liked.push(item);
-      } else if (item.feedback === 'reject') {
-        disliked.push(item);
-      }
-    });
-
-    console.log('Final liked items:', liked.map(i => `${i.database_id}:${i.feedback}`));
-    console.log('Final disliked items:', disliked.map(i => `${i.database_id}:${i.feedback}`));
-
-    // Ensure no item appears in both arrays (safety check) using composite keys
-    const likedKeys = new Set(liked.map(getItemKey));
-    const finalDisliked = disliked.filter(i => !likedKeys.has(getItemKey(i)));
-    
-    console.log('After deduplication - liked:', liked.length, 'disliked:', finalDisliked.length);
-
-    setLikedItems(liked);
-    setDislikedItems(finalDisliked);
-  }, [youtubeItems, paperItems]);
-
-  // Show only items without feedback based on incoming item.feedback
-  // This avoids wiping regenerated items due to external liked/disliked state
-  const youtubeItemsWithoutFeedback = youtubeItems.filter(item => !item.feedback);
-  const paperItemsWithoutFeedback = paperItems.filter(item => !item.feedback);
+  const alreadyProcessedKeys = getLikedDislikedKeys();
+  
+  const youtubeItemsWithoutFeedback = youtubeItems.filter(item => 
+    !item.feedback && !alreadyProcessedKeys.has(getItemKey(item))
+  );
+  const paperItemsWithoutFeedback = paperItems.filter(item => 
+    !item.feedback && !alreadyProcessedKeys.has(getItemKey(item))
+  );
   
   const handleBackToSetup = () => {
     onBackToSetup();
   };
 
   const handleItemFeedback = async (item: Item, feedback: 'accept' | 'reject') => {
-    const updatedItem = { ...item, feedback };
     const key = getItemKey(item);
     
+    // Update local state immediately for better UX
     if (feedback === 'accept') {
       // Remove from disliked if it exists there (by composite key)
       setDislikedItems(prev => prev.filter(i => getItemKey(i) !== key));
       // Add to liked if not already there (by composite key)
-      setLikedItems(prev => (prev.some(i => getItemKey(i) === key) ? prev : [...prev, updatedItem]));
+      setLikedItems(prev => {
+        if (prev.some(i => getItemKey(i) === key)) return prev;
+        return [...prev, { ...item, feedback }];
+      });
     } else {
       // Remove from liked if it exists there (by composite key)
       setLikedItems(prev => prev.filter(i => getItemKey(i) !== key));
       // Add to disliked if not already there (by composite key)
-      setDislikedItems(prev => (prev.some(i => getItemKey(i) === key) ? prev : [...prev, updatedItem]));
+      setDislikedItems(prev => {
+        if (prev.some(i => getItemKey(i) === key)) return prev;
+        return [...prev, { ...item, feedback }];
+      });
     }
 
-    // Sync from server to ensure state matches DB
-    await rebuildFromLikes();
+    // Sync from server after a short delay to ensure API call completes
+    // This ensures the server state is the source of truth
+    setTimeout(async () => {
+      await rebuildFromLikes();
+    }, 100);
   };
 
   const handleRemoveItem = (id: number, type: 'liked' | 'disliked') => {
+    // Find the item to remove to get its composite key
+    const sourceList = type === 'liked' ? likedItems : dislikedItems;
+    const item = sourceList.find(item => item.id === id);
+    
+    if (!item) return;
+    
+    const key = getItemKey(item);
+    
     if (type === 'liked') {
-      setLikedItems(prev => prev.filter(item => item.id !== id));
+      setLikedItems(prev => prev.filter(i => getItemKey(i) !== key));
     } else {
-      setDislikedItems(prev => prev.filter(item => item.id !== id));
+      setDislikedItems(prev => prev.filter(i => getItemKey(i) !== key));
     }
   };
 
@@ -176,20 +165,22 @@ export default function HomeScreen({
       return;
     }
 
-    // Update the item's feedback status
+    // Update UI state immediately for visual feedback using composite keys
+    const key = getItemKey(item);
     const updatedItem = { ...item, feedback: toType === 'liked' ? 'accept' as const : 'reject' as const };
 
-    // Update UI state immediately for visual feedback
+    // Remove from source list using composite key
     if (fromType === 'liked') {
-      setLikedItems(prev => prev.filter(item => item.id !== id));
+      setLikedItems(prev => prev.filter(i => getItemKey(i) !== key));
     } else {
-      setDislikedItems(prev => prev.filter(item => item.id !== id));
+      setDislikedItems(prev => prev.filter(i => getItemKey(i) !== key));
     }
 
+    // Add to destination list using composite key
     if (toType === 'liked') {
-      setLikedItems(prev => (prev.some(i => getItemKey(i) === getItemKey(updatedItem)) ? prev : [...prev, updatedItem]));
+      setLikedItems(prev => (prev.some(i => getItemKey(i) === key) ? prev : [...prev, updatedItem]));
     } else {
-      setDislikedItems(prev => (prev.some(i => getItemKey(i) === getItemKey(updatedItem)) ? prev : [...prev, updatedItem]));
+      setDislikedItems(prev => (prev.some(i => getItemKey(i) === key) ? prev : [...prev, updatedItem]));
     }
 
     // Call backend API to update the database
@@ -202,18 +193,20 @@ export default function HomeScreen({
       const result = await updateLikeStatus(payload);
       console.log("Like status updated:", result);
 
-      // Sync from server after successful toggle
-      await rebuildFromLikes();
+      // Sync from server after successful toggle with delay
+      setTimeout(async () => {
+        await rebuildFromLikes();
+      }, 100);
     } catch (error) {
       console.error("Error updating like status:", error);
       
-      // Revert UI state on error
+      // Revert UI state on error using composite keys
       if (fromType === 'liked') {
-        setLikedItems(prev => (prev.some(i => getItemKey(i) === getItemKey(item)) ? prev : [...prev, item]));
-        setDislikedItems(prev => prev.filter(it => it.id !== id));
+        setLikedItems(prev => (prev.some(i => getItemKey(i) === key) ? prev : [...prev, item]));
+        setDislikedItems(prev => prev.filter(i => getItemKey(i) !== key));
       } else {
-        setDislikedItems(prev => (prev.some(i => getItemKey(i) === getItemKey(item)) ? prev : [...prev, item]));
-        setLikedItems(prev => prev.filter(it => it.id !== id));
+        setDislikedItems(prev => (prev.some(i => getItemKey(i) === key) ? prev : [...prev, item]));
+        setLikedItems(prev => prev.filter(i => getItemKey(i) !== key));
       }
       
       alert("Failed to update like status. Please try again.");
