@@ -53,7 +53,8 @@ export default function App() {
 
   const handleBackToSetup = () => {
     setHasRun(false);
-    setProjectData(null);
+    // Don't reset projectData to preserve regenerated items
+    // setProjectData(null);
   };
 
   const handleUserLogin = (userProfile: UserProfile) => {
@@ -62,6 +63,16 @@ export default function App() {
 
   const handleUserLogout = () => {
     setUser(null);
+  };
+
+  const handleItemsUpdate = (youtubeItems: Item[], paperItems: Item[]) => {
+    if (projectData) {
+      setProjectData({
+        ...projectData,
+        youtubeItems,
+        paperItems
+      });
+    }
   };
 
   if (!hasRun || !projectData) {
@@ -78,6 +89,7 @@ export default function App() {
       project_id={projectData.project_id}
       query_id={projectData.query_id}
       onBackToSetup={handleBackToSetup}
+      onItemsUpdate={handleItemsUpdate}
       user={user}
       onUserLogin={handleUserLogin}
       onUserLogout={handleUserLogout}

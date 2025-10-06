@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Check, X, RotateCcw, Youtube, FileText, Cpu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ export function Panel({
   guidelines = "",
   items: externalItems,
   onItemFeedback,
+  onItemsUpdate,
   user,
   project_id,
   query_id
@@ -28,6 +29,7 @@ export function Panel({
   guidelines?: string;
   items?: Item[];
   onItemFeedback?: (item: Item, feedback: 'accept' | 'reject') => void;
+  onItemsUpdate?: (items: Item[]) => void;
   user?: { user_id?: number } | null;
   project_id?: number;
   query_id?: number;
@@ -91,6 +93,10 @@ export function Panel({
           
           console.log("Created YouTube items:", youtubeItems);
           setItems(youtubeItems);
+          // Notify parent component about the new items
+          if (onItemsUpdate) {
+            onItemsUpdate(youtubeItems);
+          }
         } else if (label === "Papers" && result.papers && Array.isArray(result.papers) && result.papers.length > 0) {
           // Convert papers to panel items with numeric IDs
           const paperItems = result.papers.map((paper: any, index: number) => ({
@@ -112,6 +118,10 @@ export function Panel({
           
           console.log("Created paper items:", paperItems);
           setItems(paperItems);
+          // Notify parent component about the new items
+          if (onItemsUpdate) {
+            onItemsUpdate(paperItems);
+          }
         }
       }
     } 
@@ -137,82 +147,91 @@ export function Panel({
       return;
     }
 
-    // Update UI state immediately for visual feedback
+    // Update UI state immediately for visual feedback with fade effect
     setItems(prev => prev.map(it => it.id === id ? { ...it, feedback: label } : it));
     
-    try {
-      let result;
-      let updatedItem = { ...item, feedback: label };
+    // Wait for the color animation to be visible before making API call
+    setTimeout(async () => {
+      try {
+        let result;
+        let updatedItem = { ...item, feedback: label };
 
-      // Check if this item already has a like record (for updates)
-      if (item.liked_disliked_id) {
-        // Update existing like/dislike record
-        const payload = {
-          liked_disliked_id: item.liked_disliked_id
-        };
-        
-        console.log("Calling updateLikeStatus API with payload:", payload);
-        result = await updateLikeStatus(payload);
-        console.log("Like updated:", result);
-        
-        // Check if update was successful
-        if (!result.success) {
-          throw new Error(result.error || "Failed to update like/dislike status");
-        }
-        
-        // Update the item with the liked_disliked_id (should remain the same)
-        updatedItem.liked_disliked_id = item.liked_disliked_id;
-        
-      } else {
-        // Create new like/dislike record
-        const payload = {
-          project_id: item.project_id,
-          target_type: item.target_type,
-          target_id: item.database_id,
-          isLiked: label === "accept"
-        };
-        
-        console.log("Calling acceptOrReject API with payload:", payload);
-        result = await acceptOrReject(payload);
-        console.log("Submission accepted or rejected:", result);
-        
-        // Check if creation was successful
-        if (!result.success) {
-          throw new Error(result.error || "Failed to create like/dislike record");
-        }
-        
-        // Update the item with the new like ID
-        if (result.like_id) {
-          updatedItem.liked_disliked_id = result.like_id;
+        // Check if this item already has a like record (for updates)
+        if (item.liked_disliked_id) {
+          // Update existing like/dislike record
+          const payload = {
+            liked_disliked_id: item.liked_disliked_id
+          };
+          
+          console.log("Calling updateLikeStatus API with payload:", payload);
+          result = await updateLikeStatus(payload);
+          console.log("Like updated:", result);
+          
+          // Check if update was successful
+          if (!result.success) {
+            throw new Error(result.error || "Failed to update like/dislike status");
+          }
+          
+          // Update the item with the liked_disliked_id (should remain the same)
+          updatedItem.liked_disliked_id = item.liked_disliked_id;
+          
         } else {
-          throw new Error("No like_id returned from server");
+          // Create new like/dislike record
+          if (!item.project_id || !item.target_type || !item.database_id) {
+            throw new Error("Missing required fields for creating like/dislike record");
+          }
+          
+          const payload = {
+            project_id: item.project_id,
+            target_type: item.target_type,
+            target_id: item.database_id,
+            isLiked: label === "accept"
+          };
+          
+          console.log("Calling acceptOrReject API with payload:", payload);
+          result = await acceptOrReject(payload);
+          console.log("Submission accepted or rejected:", result);
+          
+          // Check if creation was successful
+          if (!result.success) {
+            throw new Error(result.error || "Failed to create like/dislike record");
+          }
+          
+          // Update the item with the new like ID
+          if (result.like_id) {
+            updatedItem.liked_disliked_id = result.like_id;
+          } else {
+            throw new Error("No like_id returned from server");
+          }
         }
+        
+        // Update the item in state with all the correct information
+        setItems(prev => prev.map(it => it.id === id ? updatedItem : it));
+        
+        // Call the parent callback with the updated item
+        if (onItemFeedback) {
+          onItemFeedback(updatedItem, label);
+        }
+        
+        // Remove item after successful API call with delay for fade effect
+        // Note: The parent component (HomeScreen) will handle the state management
+        // We remove from local panel state but the parent will sync from server
+        setTimeout(() => {
+          setItems(prev => prev.filter(it => it.id !== id));
+        }, 500); // Show color for 0.5s, then start fade
+        
+      } catch (error) {
+        console.error("Error accepting or rejecting:", error);
+        // Revert the feedback state on error
+        setItems(prev => prev.map(it => 
+          it.id === id ? { ...it, feedback: undefined } : it
+        ));
+        
+        // Show user-friendly error message
+        const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+        alert(`Failed to ${label} item: ${errorMessage}`);
       }
-      
-      // Update the item in state with all the correct information
-      setItems(prev => prev.map(it => it.id === id ? updatedItem : it));
-      
-      // Call the parent callback with the updated item
-      if (onItemFeedback) {
-        onItemFeedback(updatedItem, label);
-      }
-      
-      // Remove item after successful API call with delay for dissolve effect
-      setTimeout(() => {
-        setItems(prev => prev.filter(it => it.id !== id));
-      }, 800);
-      
-    } catch (error) {
-      console.error("Error accepting or rejecting:", error);
-      // Revert the feedback state on error
-      setItems(prev => prev.map(it => 
-        it.id === id ? { ...it, feedback: undefined } : it
-      ));
-      
-      // Show user-friendly error message
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-      alert(`Failed to ${label} item: ${errorMessage}`);
-    }
+    }, 300); // Wait 300ms for color animation to be visible
   }
 
   return (
@@ -249,19 +268,27 @@ export function Panel({
               No items yet. Click "Regenerate" to generate content for this panel.
             </div>
           ) : (
-            items.map((it) => (
+            <AnimatePresence mode="popLayout">
+              {items.map((it) => (
             <motion.div
               key={`panel-${kind}-${it.id}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{
                 opacity: 1,
-                y: 0,
                 backgroundColor:
-                  it.feedback === "accept" ? "#bbf7d0" :
-                  it.feedback === "reject" ? "#fecaca" : undefined,
+                  it.feedback === "accept" ? "#10b981" : // Brighter Green
+                  it.feedback === "reject" ? "#dc2626" : // Brighter Red
+                  undefined,
               }}
-              exit={{ opacity: 0 }}
-              className="flex items-start justify-between rounded-xl border p-3 transition-colors"
+              transition={{
+                duration: it.feedback ? 0.3 : 0.3,
+                ease: "easeInOut"
+              }}
+              exit={{ 
+                opacity: 0,
+                transition: { duration: 0.7, ease: "easeInOut" }
+              }}
+              className="flex items-start justify-between rounded-xl border p-3 transition-all duration-300"
             >
               <div className="space-y-1 flex-1">
                 {kind === "youtube" && it.meta.video_url ? (
@@ -271,7 +298,7 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300">{it.title}</div>
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300 transition-colors">{it.title}</div>
                     <div className="text-xs text-zinc-400">
                       <span>{it.meta.channel} • {formatDuration(it.meta.duration || null)} • {formatNumber(it.meta.views || 0)} views • {formatNumber(it.meta.likes || 0)} likes</span>
                     </div>
@@ -283,7 +310,7 @@ export function Panel({
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
-                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300">{it.title}</div>
+                    <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300 transition-colors">{it.title}</div>
                     <div className="text-xs text-zinc-400">
                       <span>{it.meta.venue} • {it.meta.year} • {it.meta.authors}</span>
                     </div>
@@ -312,7 +339,8 @@ export function Panel({
                 </Button>
               </div>
             </motion.div>
-            ))
+            ))}
+            </AnimatePresence>
           )}
         </div>
       </CardContent>
