@@ -49,12 +49,3 @@ def create_app():
         })
     
     return app
-
-if __name__ == '__main__':
-    # Load environment variables
-    load_dotenv()
-        
-    # Create and run the Flask app
-    app = create_app()
-    print("Starting MemoScholar Flask Application...")
-    app.run(debug=True, host='0.0.0.0', port=5000)
