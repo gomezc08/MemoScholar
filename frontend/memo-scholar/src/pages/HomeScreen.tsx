@@ -4,7 +4,7 @@ import { Panel } from "@/components/ui/panel";
 import { HeaderBar } from "@/components/ui/header_bar";
 import { ManagementPanel } from "@/components/ui/management_panel";
 import SimpleLogin from "@/components/ui/simple-login";
-import { updateLikeStatus, getProjectLikes } from "@/lib/api";
+import { updateLikeStatus, getProjectLikes, getYoutubeVideo, getPaper } from "@/lib/api";
 import type { Item, UserProfile } from "@/types";
 
 interface HomeScreenProps {
@@ -58,15 +58,73 @@ export default function HomeScreen({
         }
       }
 
-      const sourceItems = [...youtubeItems, ...paperItems];
       const nextLiked: Item[] = [];
       const nextDisliked: Item[] = [];
 
+      // Fetch each liked/disliked item from the database
       for (const [, like] of latestByKey) {
-        const item = sourceItems.find(i => (i.target_type === like.target_type) && ((i.database_id ?? i.id) === like.target_id));
-        if (item) {
-          const updated: Item = { ...item, feedback: like.isLiked ? 'accept' : 'reject', liked_disliked_id: like.liked_disliked_id };
-          if (updated.feedback === 'accept') nextLiked.push(updated); else nextDisliked.push(updated);
+        try {
+          let itemData: any = null;
+          
+          if (like.target_type === 'youtube') {
+            itemData = await getYoutubeVideo(like.target_id);
+            if (itemData) {
+              // Convert database format to Item format
+              const item: Item = {
+                id: Date.now() + Math.random(), // Generate unique ID for display
+                title: itemData.video_title,
+                database_id: itemData.youtube_id,
+                target_type: 'youtube' as const,
+                project_id: itemData.project_id,
+                meta: {
+                  channel: "YouTube",
+                  duration: itemData.video_duration,
+                  views: parseInt(itemData.video_views) || 0,
+                  likes: parseInt(itemData.video_likes) || 0,
+                  video_url: itemData.video_url
+                },
+                feedback: like.isLiked ? 'accept' : 'reject',
+                liked_disliked_id: like.liked_disliked_id
+              };
+              
+              if (like.isLiked) {
+                nextLiked.push(item);
+              } else {
+                nextDisliked.push(item);
+              }
+            }
+          } else if (like.target_type === 'paper') {
+            itemData = await getPaper(like.target_id);
+            if (itemData) {
+              // Convert database format to Item format
+              const item: Item = {
+                id: Date.now() + Math.random(), // Generate unique ID for display
+                title: itemData.paper_title,
+                database_id: itemData.paper_id,
+                target_type: 'paper' as const,
+                project_id: itemData.project_id,
+                meta: {
+                  venue: "ArXiv",
+                  year: itemData.published_year,
+                  authors: "Unknown", // We don't have authors in the basic paper data
+                  link: itemData.pdf_link,
+                  pdf_link: itemData.pdf_link,
+                  summary: itemData.paper_summary
+                },
+                feedback: like.isLiked ? 'accept' : 'reject',
+                liked_disliked_id: like.liked_disliked_id
+              };
+              
+              if (like.isLiked) {
+                nextLiked.push(item);
+              } else {
+                nextDisliked.push(item);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch ${like.target_type} item ${like.target_id}:`, error);
+          // Continue with other items even if one fails
         }
       }
 

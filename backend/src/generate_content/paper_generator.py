@@ -180,6 +180,7 @@ class PaperGenerator:
         
         # 4. Single LLM call
         try:
+            self.logger.info(f"IMPORTANT: Here is the past recommendations: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'}")
             response = openai_client.run_request(
                 prompt,
                 model=self.model,
