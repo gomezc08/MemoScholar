@@ -126,9 +126,6 @@ export default function ConversationsSidebar({
                     }}>
                       {project.objective}
                     </p>
-                    <div className="text-xs text-zinc-500 mt-2">
-                      Project #{project.project_id}
-                    </div>
                   </div>
                 </div>
               </div>

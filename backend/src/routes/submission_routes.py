@@ -93,3 +93,55 @@ def generate_submission_individual_panel():
             'error': str(e),
             'success': False
         }), 500
+
+@submission_bp.route('/api/youtube/<int:youtube_id>', methods=['GET'])
+def get_youtube_video(youtube_id):
+    """
+    Get a single YouTube video by ID.
+    """
+    try:
+        video = TaskManager().handle_get_youtube_video(youtube_id)
+        
+        if not video:
+            return jsonify({
+                'error': 'YouTube video not found',
+                'success': False
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'video': video
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Exception in get_youtube_video: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
+@submission_bp.route('/api/papers/<int:paper_id>', methods=['GET'])
+def get_paper(paper_id):
+    """
+    Get a single paper by ID.
+    """
+    try:
+        paper = TaskManager().handle_get_paper(paper_id)
+        
+        if not paper:
+            return jsonify({
+                'error': 'Paper not found',
+                'success': False
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'paper': paper
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Exception in get_paper: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500

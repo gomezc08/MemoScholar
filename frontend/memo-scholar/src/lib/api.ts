@@ -134,3 +134,23 @@ export async function getProjectLikes(projectId: number): Promise<any[]> {
   return response.likes || [];
 }
 
+export async function getYoutubeVideo(youtubeId: number): Promise<any> {
+  const res = await fetch(`/api/youtube/${youtubeId}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to get YouTube video");
+  const response = await res.json();
+  return response.video;
+}
+
+export async function getPaper(paperId: number): Promise<any> {
+  const res = await fetch(`/api/papers/${paperId}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to get paper");
+  const response = await res.json();
+  return response.paper;
+}
+

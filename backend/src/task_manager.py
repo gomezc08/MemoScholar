@@ -322,6 +322,60 @@ class TaskManager:
             self.logger.error(f"Unexpected error in handle_get_complete_project_data: {str(e)}")
             raise RuntimeError(f"Failed to get complete project data: {str(e)}")
 
+    def handle_get_youtube_video(self, youtube_id):
+        """
+        Get a single YouTube video by ID.
+        Returns video data or None if not found.
+        """
+        try:
+            # Validate youtube_id
+            if not youtube_id or youtube_id <= 0:
+                raise ValueError("Invalid youtube_id provided")
+            
+            # Get YouTube video by ID
+            video = self.db_select.get_youtube_video(youtube_id)
+            
+            if not video:
+                self.logger.info(f"YouTube video not found with ID: {youtube_id}")
+                return None
+            
+            self.logger.info(f"Retrieved YouTube video with ID: {youtube_id}")
+            return video
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_youtube_video: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_youtube_video: {str(e)}")
+            raise RuntimeError(f"Failed to get YouTube video: {str(e)}")
+
+    def handle_get_paper(self, paper_id):
+        """
+        Get a single paper by ID.
+        Returns paper data or None if not found.
+        """
+        try:
+            # Validate paper_id
+            if not paper_id or paper_id <= 0:
+                raise ValueError("Invalid paper_id provided")
+            
+            # Get paper by ID
+            paper = self.db_select.get_paper(paper_id)
+            
+            if not paper:
+                self.logger.info(f"Paper not found with ID: {paper_id}")
+                return None
+            
+            self.logger.info(f"Retrieved paper with ID: {paper_id}")
+            return paper
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_paper: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_paper: {str(e)}")
+            raise RuntimeError(f"Failed to get paper: {str(e)}")
+
     
     def _handle_project_task(self, data):
         """

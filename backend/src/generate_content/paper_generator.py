@@ -156,8 +156,11 @@ class PaperGenerator:
         # 3. Single LLM call with real data
         # Handle optional fields with defaults
         special_instructions = data.get('user_special_instructions', '')
-        past_recommendations = self.db_select.get_project_papers(data['project_id']) if data['project_id'] else None
-        past_recommendations = [paper['paper_title'] for paper in past_recommendations] if past_recommendations else None
+        if 'project_id' in data:
+            past_recommendations = self.db_select.get_project_papers(data['project_id']) if data['project_id'] else None
+            past_recommendations = [paper['paper_title'] for paper in past_recommendations] if past_recommendations else None
+        else:
+            past_recommendations = None
         
         prompt = f"""
         Given these Academic papers about {data['topic']}:
@@ -177,6 +180,7 @@ class PaperGenerator:
         
         # 4. Single LLM call
         try:
+            self.logger.info(f"IMPORTANT: Here is the past recommendations: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'}")
             response = openai_client.run_request(
                 prompt,
                 model=self.model,
