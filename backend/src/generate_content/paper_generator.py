@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
 from ..db.db_crud.select_db import DBSelect
+from .create_query import CreateQuery
 
 class PaperGenerator:
     def __init__(self):
@@ -13,6 +14,7 @@ class PaperGenerator:
         self.temperature = 0.0
         self.logger = get_logger(__name__)
         self.db_select = DBSelect()
+        self.create_query = CreateQuery()
 
     def search_paper(self, query: str, max_results: int = 10):
         encoded_query = urllib.parse.quote(query)
@@ -128,11 +130,11 @@ class PaperGenerator:
         
         return content
 
-    def generate_paper(self, data):
-        # 1. Build search query from inputs
-        query = f"{data['topic']}; {data['objective']}. "
+    def generate_paper(self, data, q):
+        # 1. query.
+        query = q['queries_text']
         if "user_special_instructions" in data:
-            query += f" IMPORTANT:{data['user_special_instructions']}"
+            query += f" .IMPORTANT:{data['user_special_instructions']}"
         
         self.logger.info(f"Search query: {query}")
 
