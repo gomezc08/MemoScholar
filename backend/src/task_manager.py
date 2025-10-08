@@ -4,6 +4,7 @@ from src.db.db_crud.insert import DBInsert
 from src.db.db_crud.select_db import DBSelect
 from src.utils.logging_config import get_logger
 from src.db.db_crud.change import DBChange
+from src.generate_content.create_query import CreateQuery
 
 class TaskManager:
     def __init__(self):
@@ -11,6 +12,7 @@ class TaskManager:
         self.db_select = DBSelect()
         self.youtube_generator = YoutubeGenerator()
         self.paper_generator = PaperGenerator()
+        self.create_query = CreateQuery()
         self.logger = get_logger(__name__)
 
     def handle_submission(self, data):
@@ -29,14 +31,18 @@ class TaskManager:
         try:
             # Always create project and query for new submissions
             if panel_name == 'Generic':
+                self.logger.info("Handling Generic panel submission")
                 project_id = self._handle_project_task(data)
                 query_id = self._handle_default_query_task(data, project_id)
                 result['project_id'] = project_id
                 result['query_id'] = query_id
             else:
                 # For panel-specific submissions, use provided project/query IDs
+                self.logger.info(f"Handling panel-specific submission: {panel_name}")
                 project_id = data['project_id']
-                query_id = data['query_id']
+                self.logger.info(f"Using project_id: {project_id}")
+                query_id = self._handle_query_task(data, project_id)
+                self.logger.info(f"Generated query_id: {query_id}")
                 
                 # Validate that the project exists
                 if project_id is None:
@@ -44,14 +50,17 @@ class TaskManager:
                 
                 # If query_id is 0 or None, create a default query
                 if query_id is None or query_id == 0:
+                    self.logger.info("Creating default query as backup")
                     query_id = self._handle_default_query_task(data, project_id)
             
             # Handle content generation based on panel type
             if panel_name in ['Generic', 'Papers']:
+                self.logger.info("Generating papers")
                 papers = self._handle_paper_task(data, project_id, query_id)
                 result['papers'] = papers or []
             
             if panel_name in ['Generic', 'YouTube']:
+                self.logger.info("Generating YouTube videos")
                 youtube_videos = self._handle_youtube_task(data, project_id, query_id)
                 result['youtube'] = youtube_videos or []
                 
@@ -412,9 +421,38 @@ class TaskManager:
 
         self.logger.info(f"Created query with ID: {query_id}")
         return query_id
+    
+    def _handle_query_task(self, data, project_id):
+        query_response = self.create_query.generate_paper_query(data)
+        
+        # Check if the response is successful and extract content
+        if not query_response or not query_response.get('success', False):
+            error_msg = "Failed to generate query"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        
+        query_text = query_response['content']
+        query_id = self.db_insert.create_query(project_id, query_text)
+        
+        if query_id is None:
+            error_msg = "Failed to create query"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+            
+        self.logger.info(f"Created query with ID: {query_id}")
+        return query_id
             
     def _handle_paper_task(self, data, project_id, query_id):
-        paper_data = self.paper_generator.generate_paper(data)
+        self.logger.info(f"Starting paper task for project_id: {project_id}, query_id: {query_id}")
+        query_result = self.db_select.get_query(query_id)
+        if not query_result:
+            error_msg = f"Query not found with ID: {query_id}"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        
+        self.logger.info(f"Retrieved query result: {query_result}")
+        paper_data = self.paper_generator.generate_paper(data, query_result)
+        self.logger.info(f"Generated paper data: {type(paper_data)}")
         papers = paper_data.get('papers', [])
         papers_with_ids = []
         
@@ -453,7 +491,17 @@ class TaskManager:
         Returns list of videos with their database IDs.
         """
         # Generate YouTube videos
-        youtube_data = self.youtube_generator.generate_youtube_videos(data)
+        self.logger.info(f"Starting YouTube task for project_id: {project_id}, query_id: {query_id}")
+        query_result = self.db_select.get_query(query_id)
+        if not query_result:
+            error_msg = f"Query not found with ID: {query_id}"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        
+        self.logger.info(f"Retrieved query result: {query_result}")
+        query_text = query_result['queries_text']
+        self.logger.info(f"Extracted query text: {query_text}")
+        youtube_data = self.youtube_generator.generate_youtube_videos(data, query_result)
         youtube_videos = youtube_data.get('youtube', [])
         youtube_with_ids = []
         

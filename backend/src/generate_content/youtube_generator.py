@@ -5,6 +5,7 @@ import re
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
 from ..db.db_crud.select_db import DBSelect
+from .create_query import CreateQuery
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -15,6 +16,7 @@ class YoutubeGenerator:
         self.temperature = 0.0
         self.logger = get_logger(__name__)
         self.db_select = DBSelect()
+        self.create_query = CreateQuery()
 
     def parse_iso8601_duration(self, duration_str):
         """
@@ -112,11 +114,11 @@ class YoutubeGenerator:
         except Exception as e:
             raise
 
-    def generate_youtube_videos(self, data):
-        # 1. Build search query from inputs
-        query = f"{data['topic']}; {data['objective']}. "
+    def generate_youtube_videos(self, data, q):
+        # 1. query.
+        query = q['queries_text']
         if "user_special_instructions" in data:
-            query += f" IMPORTANT:{data['user_special_instructions']}"
+            query += f" .IMPORTANT:{data['user_special_instructions']}"
         
         self.logger.info(f"Search query: {query}")
             
