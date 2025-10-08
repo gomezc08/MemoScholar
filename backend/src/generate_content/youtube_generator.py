@@ -4,6 +4,7 @@ import requests
 import re
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
+from ..db.db_crud.select_db import DBSelect
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -13,6 +14,7 @@ class YoutubeGenerator:
         self.model = "gpt-4o-mini"
         self.temperature = 0.0
         self.logger = get_logger(__name__)
+        self.db_select = DBSelect()
 
     def parse_iso8601_duration(self, duration_str):
         """
@@ -129,25 +131,27 @@ class YoutubeGenerator:
         # 3. Single LLM call with real data
         # Handle optional fields with defaults
         special_instructions = data.get('user_special_instructions', '')
-        past_recommendations = data.get('past_recommendations', '')
+        past_recommendations = self.db_select.get_project_youtube_videos(data['project_id']) if data['project_id'] else None
+        past_recommendations = [video['video_title'] for video in past_recommendations] if past_recommendations else None
         
         prompt = f"""
         Given these YouTube videos about {data['topic']}:
         {json.dumps(raw_videos, indent=2, ensure_ascii=False)}
         
-        Select the 5 most relevant videos based on:
+        Select up to the 5 most relevant videos based on:
         - Objective: {data['objective']}
         - Guidelines: {data['guidelines']}
         - Special Instructions: {special_instructions}
-        - Avoid duplicates: {past_recommendations}
+        - Avoid duplicates: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'} (IMPORTANT: Do not recommend duplicate papers)
 
         IMPORTANT: Make sure to follow the special instructions carefully.
-        
-        Return JSON in this format: {{"youtube_videos": [...]}}
+        Return ONLY valid JSON in this exact format (no comments, no explanations):
+        {{"youtube_videos": [...]}}
         """
         
         # 4. Single LLM call
         try:
+            self.logger.info(f"IMPORTANT: Here is the past recommendations: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'}")
             response = openai_client.run_request(
                 prompt,
                 model=self.model,

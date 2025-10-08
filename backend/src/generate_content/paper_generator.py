@@ -4,6 +4,7 @@ import json
 import xml.etree.ElementTree as ET
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
+from ..db.db_crud.select_db import DBSelect
 
 class PaperGenerator:
     def __init__(self):
@@ -11,6 +12,7 @@ class PaperGenerator:
         self.model = "gpt-4o-mini"
         self.temperature = 0.0
         self.logger = get_logger(__name__)
+        self.db_select = DBSelect()
 
     def search_paper(self, query: str, max_results: int = 10):
         encoded_query = urllib.parse.quote(query)
@@ -154,20 +156,21 @@ class PaperGenerator:
         # 3. Single LLM call with real data
         # Handle optional fields with defaults
         special_instructions = data.get('user_special_instructions', '')
-        past_recommendations = data.get('past_recommendations', '')
+        past_recommendations = self.db_select.get_project_papers(data['project_id']) if data['project_id'] else None
+        past_recommendations = [paper['paper_title'] for paper in past_recommendations] if past_recommendations else None
         
         prompt = f"""
         Given these Academic papers about {data['topic']}:
         {json.dumps(raw_papers, indent=2, ensure_ascii=False)}
         
-        Select the 5 most relevant papers based on:
+        Select up to 5 most relevant papers based on:
         - Objective: {data['objective']}
         - Guidelines: {data['guidelines']}
         - Special Instructions: {special_instructions}
-        - Avoid duplicates: {past_recommendations}
+        - Avoid duplicates: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'} (IMPORTANT: Do not recommend duplicate papers)
 
         IMPORTANT: Make sure to follow the special instructions carefully.
-        
+
         Return ONLY valid JSON in this exact format (no comments, no explanations):
         {{"papers": [...]}}
         """
