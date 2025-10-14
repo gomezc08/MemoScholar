@@ -75,20 +75,23 @@ class JaccardVideoRecommender:
             self._upsert_project_features(project_id)
             self._upsert_youtube_features(project_id)
 
-    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True) -> List[ScoredItem]:
+    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, dislike_weight: float = 1.0) -> List[ScoredItem]:
         """
         Score current staged candidates in `youtube_current_recs`, update their score/rank,
         and return the top-k as `ScoredItem`s. Expects up to 15 candidates pre-staged per project.
         """
         proj_feats = self._load_project_feature_set(project_id, include_likes=include_likes)
         proj_feats = self._normalize_project_features_for_video(proj_feats)
+        disliked_feats = self._load_disliked_feature_set(project_id)
         cand_rows = self._fetch_current_recs(project_id)
 
         scored: List[Tuple[int, str, Optional[str], float]] = []
         for r in cand_rows:
             # r format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
             feats = self._youtube_features_from_rec_row(r)
-            s = _jaccard(proj_feats, feats)
+            pos = _jaccard(proj_feats, feats)
+            neg = _jaccard(disliked_feats, feats) if disliked_feats else 0.0
+            s = max(0.0, pos - dislike_weight * neg)
             scored.append((r[0], r[1], r[4], s))
 
         # Persist scores and ranks
@@ -113,6 +116,34 @@ class JaccardVideoRecommender:
             else:
                 norm.add(f)
         return norm
+
+    def _load_disliked_feature_set(self, project_id: int) -> Set[str]:
+        """
+        Aggregate features from all disliked youtube items for this project.
+        """
+        cur = self.cx.cursor
+        cur.execute(
+            """
+            SELECT target_id
+            FROM likes
+            WHERE project_id=%s AND target_type='youtube' AND isLiked = FALSE
+            """,
+            (project_id,),
+        )
+        disliked_ids = [r[0] for r in cur.fetchall()]
+        if not disliked_ids:
+            return set()
+        feats: Set[str] = set()
+        for tid in disliked_ids:
+            cur.execute(
+                """
+                SELECT feature FROM item_features
+                WHERE target_type='youtube' AND target_id=%s
+                """,
+                (tid,),
+            )
+            feats |= {r[0] for r in cur.fetchall()}
+        return feats
 
     def promote_topk_and_clear(self, project_id: int, topk: int = 5) -> None:
         """
