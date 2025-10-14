@@ -75,7 +75,7 @@ class JaccardVideoRecommender:
             self._upsert_project_features(project_id)
             self._upsert_youtube_features(project_id)
 
-    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, dislike_weight: float = 1.0) -> List[ScoredItem]:
+    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, dislike_weight: float = 0.5) -> List[ScoredItem]:
         """
         Score current staged candidates in `youtube_current_recs`, update their score/rank,
         and return the top-k as `ScoredItem`s. Expects up to 15 candidates pre-staged per project.
