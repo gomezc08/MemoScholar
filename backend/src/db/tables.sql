@@ -1,13 +1,14 @@
 DROP TABLE IF EXISTS likes;
+DROP TABLE IF EXISTS rec_impressions;
 DROP TABLE IF EXISTS youtube;
 DROP TABLE IF EXISTS paperauthors;
 DROP TABLE IF EXISTS authors;
 DROP TABLE IF EXISTS papers;
 DROP TABLE IF EXISTS queries;
-DROP TABLE IF EXISTS project;
-DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS project_features;
 DROP TABLE IF EXISTS item_features;
+DROP TABLE IF EXISTS project;
+DROP TABLE IF EXISTS users;
 
 CREATE TABLE users (
 	user_id SERIAL PRIMARY KEY,
@@ -37,7 +38,13 @@ CREATE TABLE papers (
     paper_title VARCHAR(255) NOT NULL,
     paper_summary TEXT,
     published_year INT,
-    pdf_link VARCHAR(100)
+    pdf_link VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_papers_project (project_id),
+    INDEX idx_papers_url (pdf_link),
+    INDEX idx_papers_year (published_year),
+    INDEX idx_papers_created (created_at)
 );
 
 CREATE TABLE authors (
@@ -60,7 +67,13 @@ CREATE TABLE youtube (
     video_duration TIME,
     video_url VARCHAR(500),
     video_views BIGINT DEFAULT 0,   
-    video_likes BIGINT DEFAULT 0
+    video_likes BIGINT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_youtube_project (project_id),
+    INDEX idx_youtube_url (video_url(191)),
+    INDEX idx_youtube_engagement (video_views, video_likes),
+    INDEX idx_youtube_created (created_at)
 );
 
 CREATE TABLE likes (
@@ -68,7 +81,13 @@ CREATE TABLE likes (
     project_id INT NOT NULL REFERENCES project(project_id) ON DELETE CASCADE,
     target_type VARCHAR(20) CHECK (target_type IN ('youtube', 'paper')),
     target_id INT NOT NULL,
-    isLiked BOOLEAN NOT NULL
+    isLiked BOOLEAN NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_like (project_id, target_type, target_id),
+    INDEX idx_likes_project (project_id),
+    INDEX idx_likes_target (target_type, target_id),
+    INDEX idx_likes_created (created_at)
 );
 
 -- ===========================================================
@@ -79,20 +98,38 @@ CREATE TABLE likes (
 CREATE TABLE project_features (
   project_id BIGINT UNSIGNED NOT NULL,
   feature VARCHAR(191) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_project_features_project
     FOREIGN KEY (project_id) REFERENCES project(project_id)
-    ON DELETE CASCADE
+    ON DELETE CASCADE,
+  UNIQUE KEY uniq_project_feature (project_id, feature)
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_project_features_project ON project_features(project_id);
 CREATE INDEX idx_project_features_feature  ON project_features(feature);
+CREATE INDEX idx_project_features_created ON project_features(created_at);
 
 -- Item features (no FK needed; these reference either youtube or papers)
 CREATE TABLE item_features (
   target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('youtube','paper')),
   target_id   BIGINT UNSIGNED NOT NULL,   -- use BIGINT to be safe with SERIAL ids
-  feature     VARCHAR(191) NOT NULL
+  feature     VARCHAR(191) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_item_feature (target_type, target_id, feature)
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_item_features_target ON item_features(target_type, target_id);
 CREATE INDEX idx_item_features_feature ON item_features(feature);
+CREATE INDEX idx_item_features_created ON item_features(created_at);
+CREATE INDEX idx_item_features_composite ON item_features(target_type, feature, target_id);
+
+CREATE TABLE rec_impressions (
+  id SERIAL PRIMARY KEY,
+  project_id BIGINT UNSIGNED NOT NULL,
+  target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('youtube','paper')),
+  target_id   BIGINT UNSIGNED NOT NULL,
+  impression_ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_proj_target (project_id, target_type, target_id),
+  INDEX idx_impressions_project_ts (project_id, impression_ts),
+  INDEX idx_impressions_target (target_type, target_id)
+) ENGINE=InnoDB;
