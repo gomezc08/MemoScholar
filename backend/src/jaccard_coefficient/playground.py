@@ -16,7 +16,6 @@ def run_demo(project_id: int = 1):
         # Refresh features after you’ve inserted new items for this project
         vids.update_features(project_id)
         papers.update_features(project_id)
-
         top_vids = vids.recommend(project_id, topk=5, include_likes=True)
         top_paps = papers.recommend(project_id, topk=5, include_likes=True)
 

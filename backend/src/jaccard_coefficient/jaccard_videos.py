@@ -63,71 +63,143 @@ class JaccardVideoRecommender:
             self.cx.open_connection()
 
     # ---------------- Public methods ----------------
-
     def update_features(self, project_id: Optional[int] = None) -> None:
-        self._ensure_tables()
+        """
+        Refresh derived features for projects and persisted youtube items.
+        Does not compute features for `youtube_current_recs` (computed ad-hoc when scoring).
+        """
         if project_id is None:
             self._upsert_all_project_features()
-            self._upsert_all_youtube_features()
+            self._upsert_youtube_features(None)
         else:
             self._upsert_project_features(project_id)
             self._upsert_youtube_features(project_id)
 
     def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True) -> List[ScoredItem]:
+        """
+        Score current staged candidates in `youtube_current_recs`, update their score/rank,
+        and return the top-k as `ScoredItem`s. Expects up to 15 candidates pre-staged per project.
+        """
         proj_feats = self._load_project_feature_set(project_id, include_likes=include_likes)
-        yt_rows = self._fetch_youtube_candidates(project_id)
+        proj_feats = self._normalize_project_features_for_video(proj_feats)
+        cand_rows = self._fetch_current_recs(project_id)
 
-        scored: List[ScoredItem] = []
-        for y in yt_rows:
-            # y format: (youtube_id, video_title, video_url)
-            feats = self._load_item_feature_set("youtube", y[0])  # y[0] is youtube_id
+        scored: List[Tuple[int, str, Optional[str], float]] = []
+        for r in cand_rows:
+            # r format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
+            feats = self._youtube_features_from_rec_row(r)
             s = _jaccard(proj_feats, feats)
-            scored.append(ScoredItem(youtube_id=y[0], title=y[1], url=y[2], score=s))  # y[1] is video_title, y[2] is video_url
+            scored.append((r[0], r[1], r[4], s))
 
-        scored.sort(key=lambda r: r.score, reverse=True)
-        return scored[:topk]
+        # Persist scores and ranks
+        scored_sorted = sorted(scored, key=lambda x: x[3], reverse=True)
+        self._update_rec_scores_and_ranks(project_id, scored_sorted)
 
-    # ---------------- Private helpers ----------------
+        # Return ScoredItem list
+        result: List[ScoredItem] = []
+        for rec_id, title, url, s in scored_sorted[:topk]:
+            result.append(ScoredItem(youtube_id=rec_id, title=title, url=url, score=s))
+        return result
 
-    def _ensure_tables(self) -> None:
+    def _normalize_project_features_for_video(self, feats: Set[str]) -> Set[str]:
+        """
+        Map project-side text tokens (qtok:*) into the same namespace as item tokens (tok:*).
+        This ensures text overlap is measured even before any likes.
+        """
+        norm: Set[str] = set()
+        for f in feats:
+            if f.startswith("qtok:"):
+                norm.add("tok:" + f[len("qtok:"):])
+            else:
+                norm.add(f)
+        return norm
+
+    def promote_topk_and_clear(self, project_id: int, topk: int = 5) -> None:
+        """
+        Insert the top-k ranked current recommendations into `youtube` as the shown items,
+        then clear all `youtube_current_recs` for the project.
+        """
         cur = self.cx.cursor
-        try:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS project_features (
-                  project_id INT NOT NULL,
-                  feature TEXT NOT NULL,
-                  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
-                )
-            """)
-        except Exception:
-            # Table might already exist, ignore the error
-            pass
-        
-        try:
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_project_features_project ON project_features(project_id)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_project_features_feature  ON project_features(feature)")
-        except Exception:
-            # Older MySQL variants don't support IF NOT EXISTS on CREATE INDEX
-            pass
-
-        try:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS item_features (
-                  target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('youtube','paper')),
-                  target_id INT NOT NULL,
-                  feature TEXT NOT NULL
-                )
-            """)
-        except Exception:
-            # Table might already exist, ignore the error
-            pass
-        try:
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_item_features_target ON item_features(target_type, target_id)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_item_features_feature ON item_features(feature)")
-        except Exception:
-            pass
+        # Select top-k by rank (computed by recommend)
+        cur.execute(
+            """
+            SELECT rec_id, video_title, video_description, video_duration, video_url, video_views, video_likes
+            FROM youtube_current_recs
+            WHERE project_id=%s
+            ORDER BY rank ASC NULLS LAST, score DESC
+            LIMIT %s
+            """,
+            (project_id, topk),
+        )
+        top_rows = cur.fetchall()
+        if top_rows:
+            cur.executemany(
+                """
+                INSERT INTO youtube(project_id, query_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
+                VALUES (%s, NULL, %s, %s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        project_id,
+                        r[1],  # title
+                        r[2],  # description
+                        r[3],  # duration (TIME)
+                        r[4],  # url
+                        r[5],  # views
+                        r[6],  # likes
+                    )
+                    for r in top_rows
+                ],
+            )
+        # Clear staging
+        cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
         self.cx.cnx.commit()
 
+    def restage_candidates(self, project_id: int, candidates: List[Dict]) -> None:
+        """
+        Replace current staged candidates for the project with the provided 15 candidates.
+        Each candidate dict may contain: title, description, duration_seconds or duration_time,
+        url, views, likes. Duration can be provided in seconds; it will be converted to TIME.
+        """
+        cur = self.cx.cursor
+        cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
+
+        def _secs_to_time(secs: Optional[int]) -> Optional[str]:
+            if secs is None:
+                return None
+            # Format HH:MM:SS
+            h = secs // 3600
+            m = (secs % 3600) // 60
+            s = secs % 60
+            return f"{h:02d}:{m:02d}:{s:02d}"
+
+        rows = []
+        for c in candidates:
+            title = c.get("title")
+            if not title:
+                # Skip invalid entries silently
+                continue
+            desc = c.get("description")
+            url = c.get("url")
+            views = c.get("views", 0)
+            likes = c.get("likes", 0)
+            if "duration_time" in c and c.get("duration_time") is not None:
+                dur_time = c.get("duration_time")
+            else:
+                dur_time = _secs_to_time(c.get("duration_seconds"))
+            rows.append((project_id, title, desc, dur_time, url, views, likes))
+
+        if rows:
+            cur.executemany(
+                """
+                INSERT INTO youtube_current_recs(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """,
+                rows,
+            )
+        self.cx.cnx.commit()
+
+    # ---------------- Private helpers ----------------
     def _project_row_with_latest_query(self, project_id: int) -> Optional[Tuple]:
         cur = self.cx.cursor
         cur.execute("""
@@ -196,6 +268,23 @@ class JaccardVideoRecommender:
         feats.add("type:youtube")
         return feats
 
+    def _youtube_features_from_rec_row(self, row: Tuple) -> Set[str]:
+        """
+        Compute features from a `youtube_current_recs` row.
+        row format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
+        """
+        feats = set()
+        text = f"{row[1] or ''} {row[2] or ''}"  # title + description
+        feats |= {f"tok:{t}" for t in _tokenize(text)}
+        db = _dur_bucket(row[3])  # duration seconds
+        if db: feats.add(db)
+        vb = _log_bucket(row[5], "popv")
+        lb = _log_bucket(row[6], "popl")
+        if vb: feats.add(vb)
+        if lb: feats.add(lb)
+        feats.add("type:youtube")
+        return feats
+
     def _upsert_youtube_features(self, project_id: Optional[int] = None) -> None:
         cur = self.cx.cursor
         if project_id is None:
@@ -253,10 +342,55 @@ class JaccardVideoRecommender:
         return {r[0] for r in cur.fetchall()}  # r[0] is feature
 
     def _fetch_youtube_candidates(self, project_id: int) -> List[Tuple]:
+        # Legacy: fetch existing persisted youtube items as candidates
         cur = self.cx.cursor
-        cur.execute("""
+        cur.execute(
+            """
             SELECT youtube_id, video_title, video_url
             FROM youtube
             WHERE project_id = %s
-        """, (project_id,))
+            """,
+            (project_id,),
+        )
         return cur.fetchall()
+
+    def _fetch_current_recs(self, project_id: int) -> List[Tuple]:
+        """
+        Fetch staged candidates with duration converted to seconds for feature bucketing.
+        """
+        cur = self.cx.cursor
+        cur.execute(
+            """
+            SELECT
+                rec_id,
+                video_title,
+                video_description,
+                TIME_TO_SEC(video_duration) AS video_duration_sec,
+                video_url,
+                video_views,
+                video_likes
+            FROM youtube_current_recs
+            WHERE project_id=%s
+            """,
+            (project_id,),
+        )
+        return cur.fetchall()
+
+    def _update_rec_scores_and_ranks(self, project_id: int, scored_sorted: List[Tuple[int, str, Optional[str], float]]) -> None:
+        """
+        Persist score and rank for current staged candidates.
+        """
+        cur = self.cx.cursor
+        # Update score
+        for rec_id, _title, _url, score in scored_sorted:
+            cur.execute(
+                "UPDATE youtube_current_recs SET score=%s WHERE rec_id=%s",
+                (score, rec_id),
+            )
+        # Update rank
+        for rank, (rec_id, _title, _url, _score) in enumerate(scored_sorted, start=1):
+            cur.execute(
+                "UPDATE youtube_current_recs SET rank_position=%s WHERE rec_id=%s",
+                (rank, rec_id),
+            )
+        self.cx.cnx.commit()
