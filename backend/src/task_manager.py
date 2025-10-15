@@ -53,17 +53,19 @@ class TaskManager:
                     self.logger.info("Creating default query as backup")
                     query_id = self._handle_default_query_task(data, project_id)
             
-            # Handle content generation based on panel type
-            if panel_name in ['Generic', 'Papers']:
-                self.logger.info("Generating papers")
-                papers = self._handle_paper_task(data, project_id, query_id)
-                result['papers'] = papers or []
+            self.logger.info(f"here is the project id: {project_id}")
             
+            # Handle content generation based on panel type
             if panel_name in ['Generic', 'YouTube']:
                 self.logger.info("Generating YouTube videos")
                 youtube_videos = self._handle_youtube_task(data, project_id, query_id)
                 result['youtube'] = youtube_videos or []
                 
+            if panel_name in ['Generic', 'Papers']:
+                self.logger.info("Generating papers")
+                papers = self._handle_paper_task(data, project_id, query_id)
+                result['papers'] = papers or []
+            
         except Exception as e:
             self.logger.error(f"Error in handle_submission: {str(e)}")
             result['success'] = False
@@ -490,6 +492,8 @@ class TaskManager:
         Generate YouTube videos and insert them into the database.
         Returns list of videos with their database IDs.
         """
+        # add project id to data.
+        data['project_id'] = project_id
         # Generate YouTube videos
         self.logger.info(f"Starting YouTube task for project_id: {project_id}, query_id: {query_id}")
         query_result = self.db_select.get_query(query_id)

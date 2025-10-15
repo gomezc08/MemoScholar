@@ -211,3 +211,47 @@ class DBInsert:
             return None
         finally:
             self.connector.close_connection()
+
+    def insert_youtube_current_recs(self, project_id, videos_list):
+        """
+        Insert a list of videos into youtube_current_recs table.
+        Each video should be a dict with keys: video_title, video_description, video_duration, video_url, video_views, video_likes
+        """
+        if not videos_list:
+            return []
+        
+        self.connector.open_connection()
+        try:
+            # Clear existing recommendations for this project first
+            delete_query = "DELETE FROM youtube_current_recs WHERE project_id = %s"
+            self.connector.cursor.execute(delete_query, (project_id,))
+            
+            inserted_ids = []
+            for rank, video in enumerate(videos_list, 1):
+                query = """
+                    INSERT INTO youtube_current_recs (
+                        project_id, video_title, video_description, video_duration, 
+                        video_url, video_views, video_likes, rank_position
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                values = (
+                    project_id,
+                    video.get('video_title', ''),
+                    video.get('video_description', ''),
+                    video.get('video_duration', '00:00:00'),
+                    video.get('video_url', ''),
+                    video.get('video_views', 0),
+                    video.get('video_likes', 0),
+                    rank
+                )
+                self.connector.cursor.execute(query, values)
+                inserted_ids.append(self.connector.cursor.lastrowid)
+            
+            self.connector.cnx.commit()
+            return inserted_ids
+        except Exception as e:
+            print("insert_youtube_current_recs error:", e)
+            self.connector.cnx.rollback()
+            return []
+        finally:
+            self.connector.close_connection()

@@ -1,22 +1,29 @@
 import json
 import os
+import logging
 import requests
 import re
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
 from ..db.db_crud.select_db import DBSelect
+from ..db.db_crud.insert import DBInsert
 from .create_query import CreateQuery
+from ..jaccard_coefficient.jaccard_videos import JaccardVideoRecommender
+from ..db.connector import Connector
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 
 class YoutubeGenerator:
     def __init__(self):
+        self.cx = Connector()
         self.model = "gpt-4o-mini"
         self.temperature = 0.0
         self.logger = get_logger(__name__)
         self.db_select = DBSelect()
+        self.db_insert = DBInsert()
         self.create_query = CreateQuery()
+        self.jaccard_video_recommender = JaccardVideoRecommender(self.cx)
 
     def parse_iso8601_duration(self, duration_str):
         """
@@ -115,22 +122,30 @@ class YoutubeGenerator:
             raise
 
     def generate_youtube_videos(self, data, q):
-        # 1. query.
+        # build ai query.
         query = q['queries_text']
         if "user_special_instructions" in data:
             query += f" .IMPORTANT:{data['user_special_instructions']}"
         
         self.logger.info(f"Search query: {query}")
             
-        # 2. Call YouTube API directly
+        # Call YouTube API directly
         try:
-            raw_videos = self.search_youtube_videos(query, max_results=15)
+            raw_videos = self.search_youtube_videos(query, max_results=20)
             self.logger.info(f"Successfully fetched {len(raw_videos)} videos from YouTube API")
         except Exception as e:
             self.logger.error(f"YouTube API failed: {str(e)}")
             raise
+
+        # Insert videos into youtube_current_recs table
+        if 'project_id' in data and raw_videos:
+            try:
+                inserted_ids = self.db_insert.insert_youtube_current_recs(data['project_id'], raw_videos)
+                self.logger.info(f"Successfully inserted {len(inserted_ids)} videos into youtube_current_recs")
+            except Exception as e:
+                self.logger.error(f"Failed to insert videos into youtube_current_recs: {str(e)}")
+                raise
         
-        # 3. Single LLM call with real data
         # Handle optional fields with defaults
         special_instructions = data.get('user_special_instructions', '')
         if 'project_id' in data:
@@ -138,52 +153,27 @@ class YoutubeGenerator:
             past_recommendations = [video['video_title'] for video in past_recommendations] if past_recommendations else None
         else:
             past_recommendations = None
-        
-        prompt = f"""
-        Given these YouTube videos about {data['topic']}:
-        {json.dumps(raw_videos, indent=2, ensure_ascii=False)}
-        
-        Select up to the 5 most relevant videos based on:
-        - Objective: {data['objective']}
-        - Guidelines: {data['guidelines']}
-        - Special Instructions: {special_instructions}
-        - Avoid duplicates: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'} (IMPORTANT: Do not recommend duplicate papers)
 
-        IMPORTANT: Make sure to follow the special instructions carefully.
-        Return ONLY valid JSON in this exact format (no comments, no explanations):
-        {{"youtube_videos": [...]}}
-        """
+        # get recs from jaccard coefficient
+        jaccard_recs = self.jaccard_video_recommender.recommend(data['project_id'], topk=5, include_likes=True)
+
+        # update features
+        self.jaccard_video_recommender.update_features(data['project_id'])
         
-        # 4. Single LLM call
-        try:
-            self.logger.info(f"IMPORTANT: Here is the past recommendations: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'}")
-            response = openai_client.run_request(
-                prompt,
-                model=self.model,
-                temperature=self.temperature
-            )
-            self.logger.info(f"OpenAI API response success: {response.get('success', False)}")
-            self.logger.info(f"Response content length: {len(response.get('content', ''))} characters")
-            
-            # Parse the JSON content from the response
-            content = response.get('content', '')
-            if content.startswith('```json'):
-                # Remove markdown code block formatting
-                content = content.replace('```json', '').replace('```', '').strip()
-            
-            try:
-                parsed_data = json.loads(content)
-                # Extract youtube_videos and rename to youtube
-                youtube_videos = parsed_data.get('youtube_videos', [])
-                return {
-                    'youtube': youtube_videos,
-                    'success': True
-                }
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Failed to parse JSON content: {str(e)}")
-                self.logger.error(f"Content: {content}")
-                raise ValueError(f"Invalid JSON response from OpenAI: {str(e)}")
-                
-        except Exception as e:
-            self.logger.error(f"OpenAI API failed: {str(e)}")
-            raise
+        # Convert ScoredItem objects to dictionary format for better API response
+        formatted_recs = []
+        for rec in jaccard_recs:
+            formatted_rec = {
+                'youtube_id': rec.youtube_id,
+                'video_title': rec.title,
+                'video_url': rec.url,
+                'score': rec.score
+            }
+            formatted_recs.append(formatted_rec)
+        
+        logging.info(f"Jaccard recs: {formatted_recs}")
+        
+        return {
+            'youtube': formatted_recs,
+            'success': True
+        }
