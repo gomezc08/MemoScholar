@@ -411,7 +411,8 @@ class JaccardVideoRecommender:
             """,
             (project_id,),
         )
-        return cur.fetchall()
+        results = cur.fetchall()
+        return results
 
     def _update_rec_scores_and_ranks(self, project_id: int, scored_sorted: List[Tuple[int, str, Optional[str], float]]) -> None:
         """

@@ -25,6 +25,15 @@ class YoutubeGenerator:
         self.create_query = CreateQuery()
         self.jaccard_video_recommender = JaccardVideoRecommender(self.cx)
 
+    def _safe_encode_string(self, text):
+        """Safely encode string for logging by removing/replacing problematic characters"""
+        if not text:
+            return ""
+        # Replace or remove characters that can cause encoding issues
+        safe_text = text.encode('ascii', 'ignore').decode('ascii')
+        # Truncate if too long
+        return safe_text[:200] + "..." if len(safe_text) > 200 else safe_text
+
     def parse_iso8601_duration(self, duration_str):
         """
         Convert ISO 8601 duration format (PT11M12S) to HH:MM:SS format.
@@ -163,11 +172,19 @@ class YoutubeGenerator:
         # jaccard_recs now returns full video details with score
         formatted_recs = []
         for rec in jaccard_recs:
-            self.logger.info(f"Jaccard rec: {rec}")
+            # Log without problematic characters to avoid UnicodeEncodeError
+            safe_rec = {
+                'rec_id': rec.get('rec_id'),
+                'video_title': self._safe_encode_string(rec.get('video_title', '')),
+                'score': rec.get('calculated_score'),
+                'rank_position': rec.get('rank_position')
+            }
+            self.logger.info(f"Jaccard rec: {safe_rec}")
             # rec is already a dictionary with full video details and score
             formatted_recs.append(rec)
         
-        logging.info(f"Jaccard recs: {formatted_recs}")
+        # Log summary without full content to avoid encoding issues
+        self.logger.info(f"Returning {len(formatted_recs)} YouTube recommendations")
         
         return {
             'youtube': formatted_recs,
