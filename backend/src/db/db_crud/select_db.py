@@ -549,3 +549,35 @@ class DBSelect:
             return None
         finally:
             self.connector.close_connection()
+    
+    def get_youtube_video_from_youtube_current_recs(self, rec_id):
+        """Get a single YouTube video from youtube_current_recs by rec_id"""
+        self.connector.open_connection()
+        try:
+            query = """
+                SELECT rec_id, project_id, video_title, video_description, 
+                       video_duration, video_url, video_views, video_likes, score, rank_position
+                FROM youtube_current_recs 
+                WHERE rec_id = %s
+            """
+            self.connector.cursor.execute(query, (rec_id,))
+            result = self.connector.cursor.fetchone()
+            if result:
+                return {
+                    'rec_id': result[0],
+                    'project_id': result[1],
+                    'video_title': result[2],
+                    'video_description': result[3],
+                    'video_duration': str(result[4]) if result[4] else None,
+                    'video_url': result[5],
+                    'video_views': result[6],
+                    'video_likes': result[7],
+                    'score': result[8],
+                    'rank_position': result[9]
+                }
+            return None
+        except Exception as e:
+            print(f"get_youtube_video_from_youtube_current_recs error: {e}")
+            return None
+        finally:
+            self.connector.close_connection()

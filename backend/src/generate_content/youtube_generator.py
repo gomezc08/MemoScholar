@@ -160,16 +160,12 @@ class YoutubeGenerator:
         # update features
         self.jaccard_video_recommender.update_features(data['project_id'])
         
-        # Convert ScoredItem objects to dictionary format for better API response
+        # jaccard_recs now returns full video details with score
         formatted_recs = []
         for rec in jaccard_recs:
-            formatted_rec = {
-                'youtube_id': rec.youtube_id,
-                'video_title': rec.title,
-                'video_url': rec.url,
-                'score': rec.score
-            }
-            formatted_recs.append(formatted_rec)
+            self.logger.info(f"Jaccard rec: {rec}")
+            # rec is already a dictionary with full video details and score
+            formatted_recs.append(rec)
         
         logging.info(f"Jaccard recs: {formatted_recs}")
         
