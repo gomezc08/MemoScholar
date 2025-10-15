@@ -24,7 +24,7 @@ class YoutubeGenerator:
         self.db_insert = DBInsert()
         self.create_query = CreateQuery()
         self.jaccard_video_recommender = JaccardVideoRecommender(self.cx)
-
+    
     def _safe_encode_string(self, text):
         """Safely encode string for logging by removing/replacing problematic characters"""
         if not text:
@@ -34,7 +34,7 @@ class YoutubeGenerator:
         # Truncate if too long
         return safe_text[:200] + "..." if len(safe_text) > 200 else safe_text
 
-    def parse_iso8601_duration(self, duration_str):
+    def _parse_iso8601_duration(self, duration_str):
         """
         Convert ISO 8601 duration format (PT11M12S) to HH:MM:SS format.
         
@@ -73,7 +73,15 @@ class YoutubeGenerator:
         # Format as HH:MM:SS
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-    def search_youtube_videos(self, query: str, max_results: int = 10):
+    def _avoid_duplicate_videos(self, videos, data):
+        past_recommendations = self.db_select.get_project_youtube_videos(data['project_id']) if data['project_id'] else None
+        unique_videos = [] 
+        for video in videos:
+            if video['video_title'] not in past_recommendations:
+                unique_videos.append(video)
+        return unique_videos
+    
+    def _search_youtube_videos(self, query: str, max_results: int = 10):
         api_key = os.getenv("YOUTUBE_API_KEY")
         if not api_key:
             raise ValueError("Missing YOUTUBE_API_KEY")
@@ -112,7 +120,7 @@ class YoutubeGenerator:
                 
                 # Parse duration from ISO 8601 to HH:MM:SS format
                 raw_duration = content.get("duration", "")
-                parsed_duration = self.parse_iso8601_duration(raw_duration)
+                parsed_duration = self._parse_iso8601_duration(raw_duration)
                 
                 results.append({
                     "video_title": snippet.get("title"),
@@ -140,16 +148,18 @@ class YoutubeGenerator:
             
         # Call YouTube API directly
         try:
-            raw_videos = self.search_youtube_videos(query, max_results=20)
+            raw_videos = self._search_youtube_videos(query, max_results=20)
             self.logger.info(f"Successfully fetched {len(raw_videos)} videos from YouTube API")
         except Exception as e:
             self.logger.error(f"YouTube API failed: {str(e)}")
             raise
 
+        unique_videos = self._avoid_duplicate_videos(raw_videos, data)
+
         # Insert videos into youtube_current_recs table
-        if 'project_id' in data and raw_videos:
+        if 'project_id' in data and unique_videos:
             try:
-                inserted_ids = self.db_insert.insert_youtube_current_recs(data['project_id'], raw_videos)
+                inserted_ids = self.db_insert.insert_youtube_current_recs(data['project_id'], unique_videos)
                 self.logger.info(f"Successfully inserted {len(inserted_ids)} videos into youtube_current_recs")
             except Exception as e:
                 self.logger.error(f"Failed to insert videos into youtube_current_recs: {str(e)}")
@@ -157,11 +167,6 @@ class YoutubeGenerator:
         
         # Handle optional fields with defaults
         special_instructions = data.get('user_special_instructions', '')
-        if 'project_id' in data:
-            past_recommendations = self.db_select.get_project_youtube_videos(data['project_id']) if data['project_id'] else None
-            past_recommendations = [video['video_title'] for video in past_recommendations] if past_recommendations else None
-        else:
-            past_recommendations = None
 
         # get recs from jaccard coefficient
         jaccard_recs = self.jaccard_video_recommender.recommend(data['project_id'], topk=5, include_likes=True)
