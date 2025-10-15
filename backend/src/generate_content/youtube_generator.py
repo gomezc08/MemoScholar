@@ -74,11 +74,30 @@ class YoutubeGenerator:
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def _avoid_duplicate_videos(self, videos, data):
-        past_recommendations = self.db_select.get_project_youtube_videos(data['project_id']) if data['project_id'] else None
+        if not data.get('project_id'):
+            self.logger.info("No project_id provided, skipping duplicate check")
+            return videos
+            
+        # Get past recommendations from both youtube table and youtube_current_recs table
+        past_recommendations = self.db_select.get_project_youtube_videos(data['project_id']) or []
+        
+        # Also check youtube_current_recs for any videos that might be there
+        past_current_recs = self.db_select.get_project_youtube_current_recs(data['project_id']) or []
+        
+        # Combine both sources and extract video titles for comparison
+        all_past_videos = past_recommendations + past_current_recs
+        past_titles = {rec['video_title'] for rec in all_past_videos}
+        
+        self.logger.info(f"Found {len(past_titles)} unique past video titles to avoid")
+        
         unique_videos = [] 
         for video in videos:
-            if video['video_title'] not in past_recommendations:
+            if video['video_title'] not in past_titles:
                 unique_videos.append(video)
+            else:
+                self.logger.info(f"Skipping duplicate video: {video['video_title']}")
+        
+        self.logger.info(f"Filtered {len(videos) - len(unique_videos)} duplicate videos, returning {len(unique_videos)} unique videos")
         return unique_videos
     
     def _search_youtube_videos(self, query: str, max_results: int = 10):
