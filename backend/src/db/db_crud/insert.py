@@ -183,24 +183,57 @@ class DBInsert:
     def create_like(self, project_id, target_type, target_id, isLiked):
         """
         target_type must be 'youtube' or 'paper' (per CHECK).
-        Optionally, validate that the target exists before inserting to avoid orphans.
+        For YouTube videos, if the target_id is a rec_id from youtube_current_recs,
+        we'll create a record in the main youtube table first.
         """
         self.connector.open_connection()
         try:
-            # Optional validation
+            actual_target_id = target_id
+            
             if target_type == "youtube":
+                # First check if it exists in the main youtube table
                 chk = "SELECT 1 FROM youtube WHERE youtube_id = %s AND project_id = %s"
+                self.connector.cursor.execute(chk, (target_id, project_id))
+                
+                if self.connector.cursor.fetchone() is None:
+                    # Not found in main table, check if it's in youtube_current_recs
+                    rec_check = """
+                        SELECT rec_id, project_id, video_title, video_description, 
+                               video_duration, video_url, video_views, video_likes
+                        FROM youtube_current_recs 
+                        WHERE rec_id = %s AND project_id = %s
+                    """
+                    self.connector.cursor.execute(rec_check, (target_id, project_id))
+                    rec_result = self.connector.cursor.fetchone()
+                    
+                    if rec_result:
+                        # Found in youtube_current_recs, create record in main youtube table
+                        insert_youtube = """
+                            INSERT INTO youtube (
+                                project_id, video_title, video_description,
+                                video_duration, video_url, video_views, video_likes
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """
+                        youtube_values = (
+                            project_id, rec_result[2], rec_result[3],  # video_title, video_description
+                            rec_result[4], rec_result[5], rec_result[6], rec_result[7]  # duration, url, views, likes
+                        )
+                        self.connector.cursor.execute(insert_youtube, youtube_values)
+                        actual_target_id = self.connector.cursor.lastrowid
+                    else:
+                        raise ValueError(f"youtube id {target_id} not found for project {project_id}")
+                        
             elif target_type == "paper":
                 chk = "SELECT 1 FROM papers WHERE paper_id = %s AND project_id = %s"
+                self.connector.cursor.execute(chk, (target_id, project_id))
+                if self.connector.cursor.fetchone() is None:
+                    raise ValueError(f"{target_type} id {target_id} not found for project {project_id}")
             else:
                 raise ValueError("target_type must be 'youtube' or 'paper'")
 
-            self.connector.cursor.execute(chk, (target_id, project_id))
-            if self.connector.cursor.fetchone() is None:
-                raise ValueError(f"{target_type} id {target_id} not found for project {project_id}")
-
+            # Create the like/dislike record
             query = "INSERT INTO likes (project_id, target_type, target_id, isLiked) VALUES (%s, %s, %s, %s)"
-            values = (project_id, target_type, target_id, isLiked)
+            values = (project_id, target_type, actual_target_id, isLiked)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
             # Return the like_id of the created like
