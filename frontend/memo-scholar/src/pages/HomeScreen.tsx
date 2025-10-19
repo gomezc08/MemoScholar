@@ -72,9 +72,27 @@ export default function HomeScreen({
           
           if (like.target_type === 'youtube') {
             console.log(`🔍 Trying to fetch YouTube video with target_id: ${like.target_id}`);
-            // First try to get from youtube table (permanent videos)
-            itemData = await getYoutubeVideo(like.target_id);
-            console.log(`📺 Result from permanent youtube table:`, itemData ? 'Found' : 'Not found');
+            
+            // First, check if the video exists in the current youtubeItems prop
+            // This handles the case where the video is from youtube_current_recs (regenerated videos)
+            const existingItem = youtubeItems.find(item => item.database_id === like.target_id);
+            if (existingItem) {
+              console.log(`📺 Found video in current youtubeItems prop`);
+              itemData = {
+                video_title: existingItem.title,
+                youtube_id: existingItem.database_id,
+                project_id: existingItem.project_id,
+                video_duration: existingItem.meta.duration,
+                video_views: existingItem.meta.views,
+                video_likes: existingItem.meta.likes,
+                video_url: existingItem.meta.video_url
+              };
+            } else {
+              // Try to get from youtube table (permanent videos)
+              itemData = await getYoutubeVideo(like.target_id);
+              console.log(`📺 Result from permanent youtube table:`, itemData ? 'Found' : 'Not found');
+            }
+            
             if (itemData) {
               // Convert database format to Item format
               const item: Item = {
@@ -208,8 +226,17 @@ export default function HomeScreen({
   // Single effect to handle server sync and item categorization
   useEffect(() => {
     // First, try to rebuild from server likes (this is the source of truth)
+    console.log(`🔄 RebuildFromLikes triggered for project_id: ${project_id}`);
     rebuildFromLikes();
   }, [project_id]); // Only rebuild when project changes, not when items change
+
+  // Also run rebuildFromLikes when youtubeItems change (when navigating back to conversation)
+  useEffect(() => {
+    if (youtubeItems.length > 0) {
+      console.log(`🔄 RebuildFromLikes triggered because youtubeItems changed (${youtubeItems.length} items)`);
+      rebuildFromLikes();
+    }
+  }, [youtubeItems]);
 
   // Show only items without feedback AND not already in liked/disliked lists
   // This ensures items don't appear in both panels and management panel
@@ -222,10 +249,21 @@ export default function HomeScreen({
   };
 
   const alreadyProcessedKeys = getLikedDislikedKeys();
+  console.log(`🔍 Current processed keys when filtering:`, Array.from(alreadyProcessedKeys));
+  console.log(`🔍 YouTube items before filtering:`, youtubeItems.map(item => ({ 
+    id: item.id, 
+    title: item.title.substring(0, 30) + '...', 
+    database_id: item.database_id, 
+    key: getItemKey(item)
+  })));
   
-  const youtubeItemsWithoutFeedback = youtubeItems.filter(item => 
-    !item.feedback && !alreadyProcessedKeys.has(getItemKey(item))
-  );
+  const youtubeItemsWithoutFeedback = youtubeItems.filter(item => {
+    const shouldShow = !item.feedback && !alreadyProcessedKeys.has(getItemKey(item));
+    if (!shouldShow) {
+      console.log(`🔍 Filtering out item "${item.title.substring(0, 30)}..." (key: ${getItemKey(item)})`);
+    }
+    return shouldShow;
+  });
   
   const paperItemsWithoutFeedback = paperItems.filter(item => 
     !item.feedback && !alreadyProcessedKeys.has(getItemKey(item))
