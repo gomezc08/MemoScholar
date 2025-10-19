@@ -259,6 +259,19 @@ class DBInsert:
             delete_query = "DELETE FROM youtube_current_recs WHERE project_id = %s"
             self.connector.cursor.execute(delete_query, (project_id,))
             
+            # Clean up orphaned likes that reference deleted rec_ids
+            # This prevents orphaned likes from showing up in the management panel
+            cleanup_query = """
+                DELETE FROM likes 
+                WHERE project_id = %s 
+                AND target_type = 'youtube' 
+                AND target_id NOT IN (
+                    SELECT youtube_id FROM youtube 
+                    WHERE project_id = %s
+                )
+            """
+            self.connector.cursor.execute(cleanup_query, (project_id, project_id))
+            
             inserted_ids = []
             for rank, video in enumerate(videos_list, 1):
                 query = """

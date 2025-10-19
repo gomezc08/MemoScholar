@@ -216,12 +216,9 @@ export function Panel({
           onItemFeedback(updatedItem, label);
         }
         
-        // Remove item after successful API call with delay for fade effect
-        // Note: The parent component (HomeScreen) will handle the state management
-        // We remove from local panel state but the parent will sync from server
-        setTimeout(() => {
-          setItems(prev => prev.filter(it => it.id !== id));
-        }, 500); // Show color for 0.5s, then start fade
+        // Don't remove from local state - let the parent component handle filtering
+        // The parent will filter out items that are in the alreadyProcessedKeys set
+        // This ensures proper synchronization between panels and management panel
         
       } catch (error) {
         console.error("Error accepting or rejecting:", error);

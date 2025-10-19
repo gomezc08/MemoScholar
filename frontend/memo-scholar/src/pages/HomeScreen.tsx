@@ -47,7 +47,9 @@ export default function HomeScreen({
   // Rebuild liked/disliked lists from server likes
   const rebuildFromLikes = async () => {
     try {
+      console.log(`🔄 Starting rebuildFromLikes for project_id: ${project_id}`);
       const likes = await getProjectLikes(project_id);
+      console.log(`📊 Raw likes from server:`, likes);
       // Keep only the latest like per target
       const latestByKey = new Map<string, any>();
       for (const like of likes) {
@@ -57,6 +59,8 @@ export default function HomeScreen({
           latestByKey.set(key, like);
         }
       }
+      console.log(`📋 Latest likes by key:`, Array.from(latestByKey.entries()));
+      console.log(`🔍 Looking for target_id: 48 in latestByKey:`, latestByKey.has('youtube-48'));
 
       const nextLiked: Item[] = [];
       const nextDisliked: Item[] = [];
@@ -67,7 +71,10 @@ export default function HomeScreen({
           let itemData: any = null;
           
           if (like.target_type === 'youtube') {
+            console.log(`🔍 Trying to fetch YouTube video with target_id: ${like.target_id}`);
+            // First try to get from youtube table (permanent videos)
             itemData = await getYoutubeVideo(like.target_id);
+            console.log(`📺 Result from permanent youtube table:`, itemData ? 'Found' : 'Not found');
             if (itemData) {
               // Convert database format to Item format
               const item: Item = {
@@ -91,6 +98,51 @@ export default function HomeScreen({
                 nextLiked.push(item);
               } else {
                 nextDisliked.push(item);
+              }
+            } else {
+              // If not found in youtube table, try youtube_current_recs table (regenerated videos)
+              console.log(`🔍 Trying to fetch from youtube_current_recs table for rec_id: ${like.target_id}`);
+              try {
+                const recResponse = await fetch(`/api/youtube/rec/${like.target_id}`, {
+                  method: "GET",
+                  headers: { "Content-Type": "application/json" },
+                });
+                console.log(`📺 Rec API response status: ${recResponse.status}`);
+                if (recResponse.ok) {
+                  const recData = await recResponse.json();
+                  console.log(`📺 Rec API response data:`, recData);
+                  if (recData.success && recData.video) {
+                    itemData = recData.video;
+                    // Convert database format to Item format for rec data
+                    const item: Item = {
+                      id: Date.now() + Math.random(), // Generate unique ID for display
+                      title: itemData.video_title,
+                      database_id: itemData.rec_id, // Use rec_id for regenerated videos
+                      target_type: 'youtube' as const,
+                      project_id: itemData.project_id,
+                      meta: {
+                        channel: "YouTube",
+                        duration: itemData.video_duration,
+                        views: parseInt(itemData.video_views) || 0,
+                        likes: parseInt(itemData.video_likes) || 0,
+                        video_url: itemData.video_url,
+                        score: itemData.score,
+                        calculated_score: itemData.calculated_score,
+                        rank_position: itemData.rank_position
+                      },
+                      feedback: like.isLiked ? 'accept' : 'reject',
+                      liked_disliked_id: like.liked_disliked_id
+                    };
+                    
+                    if (like.isLiked) {
+                      nextLiked.push(item);
+                    } else {
+                      nextDisliked.push(item);
+                    }
+                  }
+                }
+              } catch (recError) {
+                console.error(`Failed to fetch rec data for ${like.target_id}:`, recError);
               }
             }
           } else if (like.target_type === 'paper') {
@@ -132,8 +184,22 @@ export default function HomeScreen({
       const likedKeys = new Set(nextLiked.map(getItemKey));
       const finalDisliked = nextDisliked.filter(i => !likedKeys.has(getItemKey(i)));
 
-      setLikedItems(nextLiked);
-      setDislikedItems(finalDisliked);
+      console.log(`📝 Setting liked items:`, nextLiked.map(item => ({ id: item.id, title: item.title, database_id: item.database_id })));
+      console.log(`📝 Setting disliked items:`, finalDisliked.map(item => ({ id: item.id, title: item.title, database_id: item.database_id })));
+
+      // Instead of completely replacing the state, merge with existing state
+      // This prevents the rebuild from overriding immediate state updates
+      setLikedItems(prev => {
+        const existingKeys = new Set(prev.map(getItemKey));
+        const newItems = nextLiked.filter(item => !existingKeys.has(getItemKey(item)));
+        return [...prev, ...newItems];
+      });
+      
+      setDislikedItems(prev => {
+        const existingKeys = new Set(prev.map(getItemKey));
+        const newItems = finalDisliked.filter(item => !existingKeys.has(getItemKey(item)));
+        return [...prev, ...newItems];
+      });
     } catch (e) {
       console.error('Failed to sync likes from server:', e);
     }
@@ -143,14 +209,16 @@ export default function HomeScreen({
   useEffect(() => {
     // First, try to rebuild from server likes (this is the source of truth)
     rebuildFromLikes();
-  }, [project_id, youtubeItems, paperItems]);
+  }, [project_id]); // Only rebuild when project changes, not when items change
 
   // Show only items without feedback AND not already in liked/disliked lists
   // This ensures items don't appear in both panels and management panel
   const getLikedDislikedKeys = () => {
     const likedKeys = new Set(likedItems.map(getItemKey));
     const dislikedKeys = new Set(dislikedItems.map(getItemKey));
-    return new Set([...likedKeys, ...dislikedKeys]);
+    const allKeys = new Set([...likedKeys, ...dislikedKeys]);
+    console.log(`🔑 Current processed keys:`, Array.from(allKeys));
+    return allKeys;
   };
 
   const alreadyProcessedKeys = getLikedDislikedKeys();
@@ -158,6 +226,7 @@ export default function HomeScreen({
   const youtubeItemsWithoutFeedback = youtubeItems.filter(item => 
     !item.feedback && !alreadyProcessedKeys.has(getItemKey(item))
   );
+  
   const paperItemsWithoutFeedback = paperItems.filter(item => 
     !item.feedback && !alreadyProcessedKeys.has(getItemKey(item))
   );

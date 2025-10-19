@@ -360,6 +360,33 @@ class TaskManager:
             self.logger.error(f"Unexpected error in handle_get_youtube_video: {str(e)}")
             raise RuntimeError(f"Failed to get YouTube video: {str(e)}")
 
+    def handle_get_youtube_video_from_recs(self, rec_id):
+        """
+        Get a single YouTube video from youtube_current_recs by rec_id.
+        Returns video data or None if not found.
+        """
+        try:
+            # Validate rec_id
+            if not rec_id or rec_id <= 0:
+                raise ValueError("Invalid rec_id provided")
+            
+            # Get YouTube video from recs by rec_id
+            video = self.db_select.get_youtube_video_from_youtube_current_recs(rec_id)
+            
+            if not video:
+                self.logger.info(f"YouTube video not found in current recs with rec_id: {rec_id}")
+                return None
+            
+            self.logger.info(f"Retrieved YouTube video from recs with rec_id: {rec_id}")
+            return video
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_youtube_video_from_recs: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_youtube_video_from_recs: {str(e)}")
+            raise RuntimeError(f"Failed to get YouTube video from recs: {str(e)}")
+
     def handle_get_paper(self, paper_id):
         """
         Get a single paper by ID.

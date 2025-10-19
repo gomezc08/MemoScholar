@@ -190,6 +190,20 @@ class JaccardVideoRecommender:
             )
         # Clear staging
         cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
+        
+        # Clean up orphaned likes that reference deleted rec_ids
+        # This prevents orphaned likes from showing up in the management panel
+        cleanup_query = """
+            DELETE FROM likes 
+            WHERE project_id = %s 
+            AND target_type = 'youtube' 
+            AND target_id NOT IN (
+                SELECT youtube_id FROM youtube 
+                WHERE project_id = %s
+            )
+        """
+        cur.execute(cleanup_query, (project_id, project_id))
+        
         self.cx.cnx.commit()
 
     def restage_candidates(self, project_id: int, candidates: List[Dict]) -> None:
@@ -200,6 +214,19 @@ class JaccardVideoRecommender:
         """
         cur = self.cx.cursor
         cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
+        
+        # Clean up orphaned likes that reference deleted rec_ids
+        # This prevents orphaned likes from showing up in the management panel
+        cleanup_query = """
+            DELETE FROM likes 
+            WHERE project_id = %s 
+            AND target_type = 'youtube' 
+            AND target_id NOT IN (
+                SELECT youtube_id FROM youtube 
+                WHERE project_id = %s
+            )
+        """
+        cur.execute(cleanup_query, (project_id, project_id))
 
         def _secs_to_time(secs: Optional[int]) -> Optional[str]:
             if secs is None:
