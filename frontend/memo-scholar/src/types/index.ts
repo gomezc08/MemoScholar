@@ -22,6 +22,10 @@ export interface Item {
     link?: string;
     pdf_link?: string;
     summary?: string;
+    // Score information for recommendations
+    score?: number;
+    calculated_score?: number;
+    rank_position?: number;
   };
   feedback?: "accept" | "reject";
 }
@@ -85,6 +89,10 @@ export interface DatabaseYoutube {
   video_url: string | null;
   video_views: number;
   video_likes: number;
+  // Score information from recommendations
+  score?: number;
+  calculated_score?: number;
+  rank_position?: number;
 }
 
 export interface DatabaseLike {

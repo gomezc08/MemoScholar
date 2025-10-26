@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Set, Optional, Tuple
 
 from src.db.connector import Connector
+from src.db.db_crud.select_db import DBSelect
 
 _STOP = {
     "a","an","the","and","or","but","if","then","else","for","to","of","in","on","by","with",
@@ -59,6 +60,7 @@ class JaccardVideoRecommender:
     """
     def __init__(self, connector: Connector):
         self.cx = connector
+        self.db_select = DBSelect()
         if self.cx.cursor is None:
             self.cx.open_connection()
 
@@ -75,7 +77,7 @@ class JaccardVideoRecommender:
             self._upsert_project_features(project_id)
             self._upsert_youtube_features(project_id)
 
-    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, dislike_weight: float = 0.5) -> List[ScoredItem]:
+    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, dislike_weight: float = 0.5) -> List[Dict]:
         """
         Score current staged candidates in `youtube_current_recs`, update their score/rank,
         and return the top-k as `ScoredItem`s. Expects up to 15 candidates pre-staged per project.
@@ -98,10 +100,14 @@ class JaccardVideoRecommender:
         scored_sorted = sorted(scored, key=lambda x: x[3], reverse=True)
         self._update_rec_scores_and_ranks(project_id, scored_sorted)
 
-        # Return ScoredItem list
-        result: List[ScoredItem] = []
+        # Return full YouTube video details with score
+        result: List[Dict] = []
         for rec_id, title, url, s in scored_sorted[:topk]:
-            result.append(ScoredItem(youtube_id=rec_id, title=title, url=url, score=s))
+            video_details = self.db_select.get_youtube_video_from_youtube_current_recs(rec_id)
+            if video_details:
+                # Add the calculated score to the video details
+                video_details['calculated_score'] = s
+                result.append(video_details)
         return result
 
     def _normalize_project_features_for_video(self, feats: Set[str]) -> Set[str]:
@@ -184,6 +190,20 @@ class JaccardVideoRecommender:
             )
         # Clear staging
         cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
+        
+        # Clean up orphaned likes that reference deleted rec_ids
+        # This prevents orphaned likes from showing up in the management panel
+        cleanup_query = """
+            DELETE FROM likes 
+            WHERE project_id = %s 
+            AND target_type = 'youtube' 
+            AND target_id NOT IN (
+                SELECT youtube_id FROM youtube 
+                WHERE project_id = %s
+            )
+        """
+        cur.execute(cleanup_query, (project_id, project_id))
+        
         self.cx.cnx.commit()
 
     def restage_candidates(self, project_id: int, candidates: List[Dict]) -> None:
@@ -194,6 +214,19 @@ class JaccardVideoRecommender:
         """
         cur = self.cx.cursor
         cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
+        
+        # Clean up orphaned likes that reference deleted rec_ids
+        # This prevents orphaned likes from showing up in the management panel
+        cleanup_query = """
+            DELETE FROM likes 
+            WHERE project_id = %s 
+            AND target_type = 'youtube' 
+            AND target_id NOT IN (
+                SELECT youtube_id FROM youtube 
+                WHERE project_id = %s
+            )
+        """
+        cur.execute(cleanup_query, (project_id, project_id))
 
         def _secs_to_time(secs: Optional[int]) -> Optional[str]:
             if secs is None:
@@ -405,7 +438,8 @@ class JaccardVideoRecommender:
             """,
             (project_id,),
         )
-        return cur.fetchall()
+        results = cur.fetchall()
+        return results
 
     def _update_rec_scores_and_ranks(self, project_id: int, scored_sorted: List[Tuple[int, str, Optional[str], float]]) -> None:
         """

@@ -53,17 +53,19 @@ class TaskManager:
                     self.logger.info("Creating default query as backup")
                     query_id = self._handle_default_query_task(data, project_id)
             
-            # Handle content generation based on panel type
-            if panel_name in ['Generic', 'Papers']:
-                self.logger.info("Generating papers")
-                papers = self._handle_paper_task(data, project_id, query_id)
-                result['papers'] = papers or []
+            self.logger.info(f"here is the project id: {project_id}")
             
+            # Handle content generation based on panel type
             if panel_name in ['Generic', 'YouTube']:
                 self.logger.info("Generating YouTube videos")
                 youtube_videos = self._handle_youtube_task(data, project_id, query_id)
                 result['youtube'] = youtube_videos or []
                 
+            if panel_name in ['Generic', 'Papers']:
+                self.logger.info("Generating papers")
+                papers = self._handle_paper_task(data, project_id, query_id)
+                result['papers'] = papers or []
+            
         except Exception as e:
             self.logger.error(f"Error in handle_submission: {str(e)}")
             result['success'] = False
@@ -358,6 +360,33 @@ class TaskManager:
             self.logger.error(f"Unexpected error in handle_get_youtube_video: {str(e)}")
             raise RuntimeError(f"Failed to get YouTube video: {str(e)}")
 
+    def handle_get_youtube_video_from_recs(self, rec_id):
+        """
+        Get a single YouTube video from youtube_current_recs by rec_id.
+        Returns video data or None if not found.
+        """
+        try:
+            # Validate rec_id
+            if not rec_id or rec_id <= 0:
+                raise ValueError("Invalid rec_id provided")
+            
+            # Get YouTube video from recs by rec_id
+            video = self.db_select.get_youtube_video_from_youtube_current_recs(rec_id)
+            
+            if not video:
+                self.logger.info(f"YouTube video not found in current recs with rec_id: {rec_id}")
+                return None
+            
+            self.logger.info(f"Retrieved YouTube video from recs with rec_id: {rec_id}")
+            return video
+            
+        except ValueError as e:
+            self.logger.error(f"Validation error in handle_get_youtube_video_from_recs: {str(e)}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error in handle_get_youtube_video_from_recs: {str(e)}")
+            raise RuntimeError(f"Failed to get YouTube video from recs: {str(e)}")
+
     def handle_get_paper(self, paper_id):
         """
         Get a single paper by ID.
@@ -490,6 +519,8 @@ class TaskManager:
         Generate YouTube videos and insert them into the database.
         Returns list of videos with their database IDs.
         """
+        # add project id to data.
+        data['project_id'] = project_id
         # Generate YouTube videos
         self.logger.info(f"Starting YouTube task for project_id: {project_id}, query_id: {query_id}")
         query_result = self.db_select.get_query(query_id)

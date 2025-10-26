@@ -75,23 +75,26 @@ export function Panel({
       if (result.success) {
         if (label === "YouTube" && result.youtube && Array.isArray(result.youtube) && result.youtube.length > 0) {
           // Convert YouTube videos to panel items with numeric IDs
-          const youtubeItems = result.youtube.map((video: any, index: number) => ({
-            id: Date.now() + index, // Generate unique numeric ID
-            title: video.video_title,
-            database_id: video.youtube_id, // Add database ID for like/dislike functionality
-            target_type: "youtube" as const,
-            project_id: project_id,
-            meta: {
-              channel: "YouTube", // We could extract channel from video data if needed
-              duration: video.video_duration,
-              views: parseInt(video.video_views) || 0, // Convert to number
-              likes: parseInt(video.video_likes) || 0, // Convert to number
-              video_url: video.video_url
-            },
-            feedback: undefined as "accept" | "reject" | undefined
-          }));
-          
-          console.log("Created YouTube items:", youtubeItems);
+          const youtubeItems = result.youtube.map((video: any, index: number) => {
+            return {
+              id: Date.now() + index, // Generate unique numeric ID
+              title: video.video_title,
+              database_id: video.rec_id || video.youtube_id, // Handle both rec_id and youtube_id
+              target_type: "youtube" as const,
+              project_id: project_id,
+              meta: {
+                channel: "YouTube", // We could extract channel from video data if needed
+                duration: video.video_duration,
+                views: parseInt(video.video_views) || 0, // Convert to number
+                likes: parseInt(video.video_likes) || 0, // Convert to number
+                video_url: video.video_url,
+                score: video.score,
+                calculated_score: video.calculated_score,
+                rank_position: video.rank_position
+              },
+              feedback: undefined as "accept" | "reject" | undefined
+            };
+          });
           setItems(youtubeItems);
           // Notify parent component about the new items
           if (onItemsUpdate) {
@@ -213,12 +216,9 @@ export function Panel({
           onItemFeedback(updatedItem, label);
         }
         
-        // Remove item after successful API call with delay for fade effect
-        // Note: The parent component (HomeScreen) will handle the state management
-        // We remove from local panel state but the parent will sync from server
-        setTimeout(() => {
-          setItems(prev => prev.filter(it => it.id !== id));
-        }, 500); // Show color for 0.5s, then start fade
+        // Don't remove from local state - let the parent component handle filtering
+        // The parent will filter out items that are in the alreadyProcessedKeys set
+        // This ensures proper synchronization between panels and management panel
         
       } catch (error) {
         console.error("Error accepting or rejecting:", error);
@@ -301,6 +301,11 @@ export function Panel({
                     <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300 transition-colors">{it.title}</div>
                     <div className="text-xs text-zinc-400">
                       <span>{it.meta.channel} • {formatDuration(it.meta.duration || null)} • {formatNumber(it.meta.views || 0)} views • {formatNumber(it.meta.likes || 0)} likes</span>
+                      {(it.meta.calculated_score !== undefined || it.meta.score !== undefined) && (
+                        <div className="mt-1 text-xs text-white font-medium">
+                          Score: {((it.meta.calculated_score || it.meta.score || 0) * 100).toFixed(2)}% • Rank: #{it.meta.rank_position || 'N/A'}
+                        </div>
+                      )}
                     </div>
                   </a>
                 ) : kind === "paper" && it.meta.link ? (

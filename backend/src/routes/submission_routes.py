@@ -120,6 +120,32 @@ def get_youtube_video(youtube_id):
             'success': False
         }), 500
 
+@submission_bp.route('/api/youtube/rec/<int:rec_id>', methods=['GET'])
+def get_youtube_video_from_recs(rec_id):
+    """
+    Get a single YouTube video from youtube_current_recs by rec_id.
+    """
+    try:
+        video = TaskManager().handle_get_youtube_video_from_recs(rec_id)
+        
+        if not video:
+            return jsonify({
+                'error': 'YouTube video not found in current recommendations',
+                'success': False
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'video': video
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Exception in get_youtube_video_from_recs: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
 @submission_bp.route('/api/papers/<int:paper_id>', methods=['GET'])
 def get_paper(paper_id):
     """

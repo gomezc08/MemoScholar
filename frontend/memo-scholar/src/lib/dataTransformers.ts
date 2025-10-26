@@ -42,6 +42,9 @@ export function transformYoutubeToItem(youtube: DatabaseYoutube): Item {
       views: youtube.video_views,
       likes: youtube.video_likes,
       video_url: youtube.video_url || undefined,
+      score: youtube.score,
+      calculated_score: youtube.calculated_score,
+      rank_position: youtube.rank_position,
     },
     feedback: undefined, // Will be set based on likes data
   };

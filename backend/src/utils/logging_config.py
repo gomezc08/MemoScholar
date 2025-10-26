@@ -21,15 +21,22 @@ def setup_logging(level: str = "INFO", log_format: Optional[str] = None) -> None
     # Convert string level to logging constant
     numeric_level = getattr(logging, level.upper(), logging.INFO)
     
-    # Configure root logger
+    # Create a stream handler with UTF-8 encoding to handle Unicode characters
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(numeric_level)
+    stream_handler.setFormatter(logging.Formatter(log_format))
+    
+    # Configure root logger with UTF-8 encoding
     logging.basicConfig(
         level=numeric_level,
         format=log_format,
-        handlers=[
-            logging.StreamHandler(sys.stdout)  # Send logs to console
-        ],
+        handlers=[stream_handler],
         force=True  # Override any existing configuration
     )
+    
+    # Set encoding for stdout to handle Unicode characters
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
 
 def get_logger(name: str) -> logging.Logger:
     """
