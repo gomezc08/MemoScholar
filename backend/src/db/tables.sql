@@ -21,7 +21,8 @@ CREATE TABLE project (
     user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     topic VARCHAR(255) NOT NULL,
     objective TEXT,
-    guidelines TEXT
+    guidelines TEXT,
+    embedding VECTOR(1536)
 );
 
 CREATE TABLE queries (
@@ -61,7 +62,8 @@ CREATE TABLE youtube (
     video_duration TIME,
     video_url VARCHAR(500),
     video_views BIGINT DEFAULT 0,   
-    video_likes BIGINT DEFAULT 0
+    video_likes BIGINT DEFAULT 0,
+    video_embedding VECTOR(1536)
 );
 
 -- Staging area for per-project recommendation candidates (15 at a time)
@@ -76,6 +78,7 @@ CREATE TABLE youtube_current_recs (
     video_likes BIGINT DEFAULT 0,
     score DOUBLE PRECISION DEFAULT 0,
     rank_position INT,
+    video_embedding VECTOR(1536),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
