@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -30,8 +31,10 @@ class DBInsert:
         """Note: user_id is REQUIRED by schema."""
         self.connector.open_connection()
         try:
-            query = "INSERT INTO project (user_id, topic, objective, guidelines, embedding) VALUES (%s, %s, %s, %s, %s)"
-            values = (user_id, topic, objective, guidelines, embedding)
+            # Convert embedding to JSON string if it's a list
+            embedding_str = json.dumps(embedding) if isinstance(embedding, list) else embedding
+            query = "INSERT INTO project (user_id, topic, objective, guidelines, embedding) VALUES (%s, %s, %s, %s, STRING_TO_VECTOR(%s))"
+            values = (user_id, topic, objective, guidelines, embedding_str)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
             # Return the project_id of the created project
@@ -161,14 +164,16 @@ class DBInsert:
                        video_views=0, video_likes=0):
         self.connector.open_connection()
         try:
+            # Convert embedding to JSON string if it's a list
+            embedding_str = json.dumps(video_embedding) if isinstance(video_embedding, list) else video_embedding
             query = """
                 INSERT INTO youtube (
                     project_id, query_id, video_title, video_description,
                     video_duration, video_url, video_views, video_likes, video_embedding
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, STRING_TO_VECTOR(%s))
             """
             values = (project_id, query_id, video_title, video_description,
-                      video_duration, video_url, video_views, video_likes, video_embedding)
+                      video_duration, video_url, video_views, video_likes, embedding_str)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
             # Return the youtube_id of the created youtube
@@ -274,11 +279,14 @@ class DBInsert:
             
             inserted_ids = []
             for rank, video in enumerate(videos_list, 1):
+                # Convert embedding to JSON string if it's a list
+                video_embedding = video.get('video_embedding', [])
+                embedding_str = json.dumps(video_embedding) if isinstance(video_embedding, list) else video_embedding
                 query = """
                     INSERT INTO youtube_current_recs (
                         project_id, video_title, video_description, video_duration, 
                         video_url, video_views, video_likes, rank_position, video_embedding
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, STRING_TO_VECTOR(%s))
                 """
                 values = (
                     project_id,
@@ -289,7 +297,7 @@ class DBInsert:
                     video.get('video_views', 0),
                     video.get('video_likes', 0),
                     rank,
-                    video.get('video_embedding', [])
+                    embedding_str
                 )
                 self.connector.cursor.execute(query, values)
                 inserted_ids.append(self.connector.cursor.lastrowid)
