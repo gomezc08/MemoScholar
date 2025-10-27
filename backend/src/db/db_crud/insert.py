@@ -31,8 +31,19 @@ class DBInsert:
         """Note: user_id is REQUIRED by schema."""
         self.connector.open_connection()
         try:
-            # Convert embedding to JSON string if it's a list
-            embedding_str = json.dumps(embedding) if isinstance(embedding, list) else embedding
+            # Convert embedding to JSON string if it's a list or array
+            if not embedding:
+                # Use a minimal valid vector if embedding is empty
+                embedding_str = '[' + ','.join(['0.0'] * 1536) + ']'
+            elif isinstance(embedding, list):
+                embedding_str = json.dumps(embedding)
+            elif hasattr(embedding, '__iter__'):
+                # Handle array.array or numpy arrays - convert to list first
+                embedding_str = json.dumps(list(embedding))
+            else:
+                # It's already a string (shouldn't happen in normal flow)
+                embedding_str = embedding
+            
             query = "INSERT INTO project (user_id, topic, objective, guidelines, embedding) VALUES (%s, %s, %s, %s, STRING_TO_VECTOR(%s))"
             values = (user_id, topic, objective, guidelines, embedding_str)
             self.connector.cursor.execute(query, values)
@@ -164,8 +175,19 @@ class DBInsert:
                        video_views=0, video_likes=0):
         self.connector.open_connection()
         try:
-            # Convert embedding to JSON string if it's a list
-            embedding_str = json.dumps(video_embedding) if isinstance(video_embedding, list) else video_embedding
+            # Convert embedding to JSON string if it's a list or array
+            if not video_embedding:
+                # Use a minimal valid vector if embedding is empty
+                embedding_str = '[' + ','.join(['0.0'] * 1536) + ']'
+            elif isinstance(video_embedding, list):
+                embedding_str = json.dumps(video_embedding)
+            elif hasattr(video_embedding, '__iter__'):
+                # Handle array.array or numpy arrays - convert to list first
+                embedding_str = json.dumps(list(video_embedding))
+            else:
+                # It's already a string (shouldn't happen in normal flow)
+                embedding_str = video_embedding
+            
             query = """
                 INSERT INTO youtube (
                     project_id, query_id, video_title, video_description,
@@ -279,9 +301,20 @@ class DBInsert:
             
             inserted_ids = []
             for rank, video in enumerate(videos_list, 1):
-                # Convert embedding to JSON string if it's a list
+                # Convert embedding to JSON string if it's a list or array
                 video_embedding = video.get('video_embedding', [])
-                embedding_str = json.dumps(video_embedding) if isinstance(video_embedding, list) else video_embedding
+                if not video_embedding:
+                    # Use a minimal valid vector if embedding is empty
+                    embedding_str = '[' + ','.join(['0.0'] * 1536) + ']'
+                elif isinstance(video_embedding, list):
+                    embedding_str = json.dumps(video_embedding)
+                elif hasattr(video_embedding, '__iter__'):
+                    # Handle array.array or numpy arrays - convert to list first
+                    embedding_str = json.dumps(list(video_embedding))
+                else:
+                    # It's already a string
+                    embedding_str = video_embedding
+                
                 query = """
                     INSERT INTO youtube_current_recs (
                         project_id, video_title, video_description, video_duration, 

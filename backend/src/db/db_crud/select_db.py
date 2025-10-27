@@ -1,5 +1,6 @@
 import os
 import sys
+import array
 
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -9,6 +10,14 @@ from src.db.connector import Connector
 class DBSelect:
     def __init__(self):
         self.connector = Connector()
+    
+    def _convert_embedding(self, embedding):
+        """Convert embedding array to list for JSON serialization"""
+        if embedding is None:
+            return None
+        if isinstance(embedding, (array.array, list)):
+            return list(embedding)
+        return embedding
     
     def get_user(self, user_id):
         """Get a single user by ID"""
@@ -90,7 +99,7 @@ class DBSelect:
                     'topic': row[2],
                     'objective': row[3],
                     'guidelines': row[4],
-                    'embedding': row[5]
+                    'embedding': self._convert_embedding(row[5])
                 }
                 for row in results
             ]
@@ -118,7 +127,7 @@ class DBSelect:
                     'topic': result[2],
                     'objective': result[3],
                     'guidelines': result[4],
-                    'embedding': result[5]
+                    'embedding': self._convert_embedding(result[5])
                 }
             return None
         except Exception as e:
@@ -145,7 +154,7 @@ class DBSelect:
                     'topic': row[2],
                     'objective': row[3],
                     'guidelines': row[4],
-                    'embedding': row[5]
+                    'embedding': self._convert_embedding(row[5])
                 }
                 for row in results
             ]
@@ -343,7 +352,7 @@ class DBSelect:
                     'video_url': row[6],
                     'video_views': row[7],
                     'video_likes': row[8],
-                    'video_embedding': row[9]
+                    'video_embedding': self._convert_embedding(row[9])
                 }
                 for row in results
             ]
@@ -376,7 +385,7 @@ class DBSelect:
                     'video_url': result[6],
                     'video_views': result[7],
                     'video_likes': result[8],
-                    'video_embedding': result[9]
+                    'video_embedding': self._convert_embedding(result[9])
                 }
             return None
         except Exception as e:
@@ -579,7 +588,7 @@ class DBSelect:
                     'video_likes': result[7],
                     'score': result[8],
                     'rank_position': result[9],
-                    'video_embedding': result[10]
+                    'video_embedding': self._convert_embedding(result[10])
                 }
             return None
         except Exception as e:
@@ -613,7 +622,7 @@ class DBSelect:
                     'video_likes': row[7],
                     'score': row[8],
                     'rank_position': row[9],
-                    'video_embedding': row[10]
+                    'video_embedding': self._convert_embedding(row[10])
                 }
                 for row in results
             ]

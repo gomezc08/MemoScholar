@@ -547,9 +547,10 @@ class TaskManager:
                 project_id, 
                 query_id, 
                 video.get('video_title', ''), 
-                video.get('video_description', ''), 
+                video.get('video_description', ''),
                 video.get('video_duration', ''), 
-                video.get('video_url', ''), 
+                video.get('video_url', ''),
+                video.get('video_embedding', []),
                 video.get('video_views', 0), 
                 video.get('video_likes', 0)
             )
