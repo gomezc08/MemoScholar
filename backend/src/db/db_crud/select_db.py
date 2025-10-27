@@ -631,3 +631,57 @@ class DBSelect:
             return []
         finally:
             self.connector.close_connection()
+    
+    def get_youtube_features(self, youtube_id):
+        """Get all features for a YouTube video"""
+        self.connector.open_connection()
+        try:
+            query = """
+                SELECT youtube_feature_id, youtube_id, category, feature
+                FROM youtube_features
+                WHERE youtube_id = %s
+                ORDER BY category, feature
+            """
+            self.connector.cursor.execute(query, (youtube_id,))
+            results = self.connector.cursor.fetchall()
+            return [
+                {
+                    'youtube_feature_id': row[0],
+                    'youtube_id': row[1],
+                    'category': row[2],
+                    'feature': row[3]
+                }
+                for row in results
+            ]
+        except Exception as e:
+            print(f"get_youtube_features error: {e}")
+            return []
+        finally:
+            self.connector.close_connection()
+    
+    def get_rec_features(self, rec_id):
+        """Get all features for a YouTube current recommendation"""
+        self.connector.open_connection()
+        try:
+            query = """
+                SELECT rec_feature_id, rec_id, category, feature
+                FROM youtube_current_recs_features
+                WHERE rec_id = %s
+                ORDER BY category, feature
+            """
+            self.connector.cursor.execute(query, (rec_id,))
+            results = self.connector.cursor.fetchall()
+            return [
+                {
+                    'rec_feature_id': row[0],
+                    'rec_id': row[1],
+                    'category': row[2],
+                    'feature': row[3]
+                }
+                for row in results
+            ]
+        except Exception as e:
+            print(f"get_rec_features error: {e}")
+            return []
+        finally:
+            self.connector.close_connection()
