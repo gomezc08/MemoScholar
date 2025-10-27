@@ -1,8 +1,6 @@
 # src/jaccard_coefficient/jaccard_videos.py
-import re
 from dataclasses import dataclass
 from typing import List, Dict, Set, Optional, Tuple
-import numpy as np
 
 from src.db.connector import Connector
 from src.db.db_crud.select_db import DBSelect
@@ -84,15 +82,11 @@ class JaccardVideoRecommender:
 
     def update_features(self, project_id: Optional[int] = None) -> None:
         """
-        Refresh derived features for projects and persisted youtube items.
-        Does not compute features for `youtube_current_recs` (computed ad-hoc when scoring).
+        Refresh derived features for persisted YouTube videos.
+        Does not compute features for `youtube_current_recs` (computed when restaging).
+        Note: Project features are computed on-the-fly and don't need updating.
         """
-        if project_id is None:
-            self._upsert_all_project_features()
-            self._upsert_youtube_features(None)
-        else:
-            self._upsert_project_features(project_id)
-            self._upsert_youtube_features(project_id)
+        self._upsert_youtube_features(project_id)
 
     def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, lambda_dislike: float = 0.5) -> List[Dict]:
         """
@@ -272,12 +266,14 @@ class JaccardVideoRecommender:
                 title = rec_row[4]
                 description = rec_row[5]
                 
-                # Generate features (no text_content needed, semantic similarity only)
+                # Generate features 
+                # Using placeholder sem_score since we don't compute actual similarity yet
+                # The video_features function will default to "sem:mid" if None
                 features_list = self.features.video_features(
                     seconds=duration_sec,
                     published_at=None,
                     views=views,
-                    sem_score=None  # Placeholder for actual similarity calculation
+                    sem_score=None
                 )
                 
                 # Insert features using db_crud
@@ -307,11 +303,9 @@ class JaccardVideoRecommender:
         
         # Calculate semantic similarity score if embedding exists
         embedding = proj_row[0]
+        # For now, we don't compute actual similarity, so use None
+        # The features.project_features function will handle it appropriately
         sem_score = None
-        if embedding is not None:
-            # Embedding calculation would go here
-            # For now, we'll use a placeholder
-            sem_score = 0.5  # Placeholder, should calculate actual similarity
         
         features_list = self.features.project_features(sem_score)
         
@@ -391,25 +385,6 @@ class JaccardVideoRecommender:
         
         return features_by_category
 
-    def _project_row_with_latest_query(self, project_id: int) -> Optional[Tuple]:
-        cur = self.cx.cursor
-        cur.execute("""
-            SELECT p.project_id, p.topic, p.objective, p.guidelines, p.embedding,
-                   q.queries_text, q.special_instructions
-            FROM project p
-            LEFT JOIN (
-                SELECT project_id, queries_text, special_instructions
-                FROM queries
-                WHERE project_id = %s
-                ORDER BY query_id DESC
-                LIMIT 1
-            ) q ON q.project_id = p.project_id
-            WHERE p.project_id = %s
-        """, (project_id, project_id))
-        rows = cur.fetchall()
-        return rows[0] if rows else None
-
-
     def _upsert_youtube_features(self, project_id: Optional[int] = None) -> None:
         """
         Update features for YouTube videos in the youtube_features table.
@@ -439,13 +414,16 @@ class JaccardVideoRecommender:
             embedding = row[4]
             
             # Generate features
-            sem_score = None  # Placeholder for actual similarity calculation
+            # sem_score=None will default to "sem:mid" in the features function
             features_list = self.features.video_features(
                 seconds=duration_sec,
                 published_at=None,
                 views=views,
-                sem_score=sem_score
+                sem_score=None
             )
+            
+            # Debug: print generated features
+            print(f"DEBUG: Generated features for youtube_id={youtube_id}: {features_list}")
             
             # Insert features using db_crud
             self.db_insert.insert_youtube_features(youtube_id, features_list)

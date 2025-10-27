@@ -91,9 +91,18 @@ class Features:
         features.append(('type', 'youtube'))
         
         # Semantic similarity feature (from embedding similarity)
-        sem = Features.sem_bucket(sem_score)
+        # If no score provided, use a default bucket to ensure comparison is possible
+        if sem_score is None:
+            sem = "sem:mid"  # Default to mid when no semantic score available
+        else:
+            sem = Features.sem_bucket(sem_score)
+        
+        # Always add emb feature
         if sem:
             features.append(('emb', sem))
+        else:
+            # Fallback if somehow sem is still None
+            features.append(('emb', 'sem:mid'))
         
         return features
     
@@ -109,7 +118,12 @@ class Features:
         features = []
         
         # Semantic similarity feature (from embedding)
-        sem = Features.sem_bucket(sem_score)
+        # If no score provided, use a default bucket
+        if sem_score is None:
+            sem = "sem:mid"  # Default to mid when no semantic score available
+        else:
+            sem = Features.sem_bucket(sem_score)
+        
         if sem:
             features.append(('emb', sem))
         
