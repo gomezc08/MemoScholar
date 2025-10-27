@@ -5,6 +5,7 @@ from src.db.db_crud.select_db import DBSelect
 from src.utils.logging_config import get_logger
 from src.db.db_crud.change import DBChange
 from src.generate_content.create_query import CreateQuery
+from src.text_embedding.embedding import Embedding
 
 class TaskManager:
     def __init__(self):
@@ -420,11 +421,16 @@ class TaskManager:
         Create a new project in the database.
         Returns project ID or raises exception on failure.
         """
+        # create embedding for the project.
+        embedding_text = f"{data['topic']}; {data['objective']}; {data['guidelines']}"
+        embedding = Embedding().embed_text(embedding_text)
+        self.logger.info(f"Embedding type: {type(embedding)}")
         project_id = self.db_insert.create_project(
             data['user_id'], 
             data['topic'], 
             data['objective'], 
-            data['guidelines']
+            data['guidelines'],
+            embedding
         )
         
         if project_id is None:
@@ -541,9 +547,10 @@ class TaskManager:
                 project_id, 
                 query_id, 
                 video.get('video_title', ''), 
-                video.get('video_description', ''), 
+                video.get('video_description', ''),
                 video.get('video_duration', ''), 
-                video.get('video_url', ''), 
+                video.get('video_url', ''),
+                video.get('video_embedding', []),
                 video.get('video_views', 0), 
                 video.get('video_likes', 0)
             )

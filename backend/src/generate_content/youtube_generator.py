@@ -10,6 +10,7 @@ from ..db.db_crud.insert import DBInsert
 from .create_query import CreateQuery
 from ..jaccard_coefficient.jaccard_videos import JaccardVideoRecommender
 from ..db.connector import Connector
+from ..text_embedding.embedding import Embedding
 
 YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -24,6 +25,7 @@ class YoutubeGenerator:
         self.db_insert = DBInsert()
         self.create_query = CreateQuery()
         self.jaccard_video_recommender = JaccardVideoRecommender(self.cx)
+        self.embedding = Embedding()
     
     def _safe_encode_string(self, text):
         """Safely encode string for logging by removing/replacing problematic characters"""
@@ -141,13 +143,20 @@ class YoutubeGenerator:
                 raw_duration = content.get("duration", "")
                 parsed_duration = self._parse_iso8601_duration(raw_duration)
                 
+                # Generate embedding for video
+                video_title = snippet.get("title", "")
+                video_description = snippet.get("description", "")
+                embedding_text = f"{video_title}; {video_description}"
+                video_embedding = self.embedding.embed_text(embedding_text)
+                
                 results.append({
-                    "video_title": snippet.get("title"),
-                    "video_description": snippet.get("description"),
+                    "video_title": video_title,
+                    "video_description": video_description,
                     "video_duration": parsed_duration,   # Now in HH:MM:SS format
                     "video_views": stats.get("viewCount"),
                     "video_likes": stats.get("likeCount"),
-                    "video_url": f"https://www.youtube.com/watch?v={v.get('id')}"
+                    "video_url": f"https://www.youtube.com/watch?v={v.get('id')}",
+                    "video_embedding": video_embedding
                 })
             
             return results

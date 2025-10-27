@@ -1,5 +1,6 @@
 import os
 import sys
+import array
 
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -9,6 +10,14 @@ from src.db.connector import Connector
 class DBSelect:
     def __init__(self):
         self.connector = Connector()
+    
+    def _convert_embedding(self, embedding):
+        """Convert embedding array to list for JSON serialization"""
+        if embedding is None:
+            return None
+        if isinstance(embedding, (array.array, list)):
+            return list(embedding)
+        return embedding
     
     def get_user(self, user_id):
         """Get a single user by ID"""
@@ -76,7 +85,7 @@ class DBSelect:
         self.connector.open_connection()
         try:
             query = """
-                SELECT project_id, user_id, topic, objective, guidelines 
+                SELECT project_id, user_id, topic, objective, guidelines, embedding
                 FROM project 
                 WHERE user_id = %s 
                 ORDER BY project_id
@@ -89,7 +98,8 @@ class DBSelect:
                     'user_id': row[1],
                     'topic': row[2],
                     'objective': row[3],
-                    'guidelines': row[4]
+                    'guidelines': row[4],
+                    'embedding': self._convert_embedding(row[5])
                 }
                 for row in results
             ]
@@ -104,7 +114,7 @@ class DBSelect:
         self.connector.open_connection()
         try:
             query = """
-                SELECT project_id, user_id, topic, objective, guidelines 
+                SELECT project_id, user_id, topic, objective, guidelines, embedding 
                 FROM project 
                 WHERE project_id = %s
             """
@@ -116,7 +126,8 @@ class DBSelect:
                     'user_id': result[1],
                     'topic': result[2],
                     'objective': result[3],
-                    'guidelines': result[4]
+                    'guidelines': result[4],
+                    'embedding': self._convert_embedding(result[5])
                 }
             return None
         except Exception as e:
@@ -130,7 +141,7 @@ class DBSelect:
         self.connector.open_connection()
         try:
             query = """
-                SELECT project_id, user_id, topic, objective, guidelines 
+                SELECT project_id, user_id, topic, objective, guidelines, embedding 
                 FROM project 
                 ORDER BY project_id
             """
@@ -142,7 +153,8 @@ class DBSelect:
                     'user_id': row[1],
                     'topic': row[2],
                     'objective': row[3],
-                    'guidelines': row[4]
+                    'guidelines': row[4],
+                    'embedding': self._convert_embedding(row[5])
                 }
                 for row in results
             ]
@@ -322,7 +334,7 @@ class DBSelect:
         try:
             query = """
                 SELECT youtube_id, project_id, query_id, video_title, video_description, 
-                       video_duration, video_url, video_views, video_likes 
+                       video_duration, video_url, video_views, video_likes, video_embedding 
                 FROM youtube 
                 WHERE project_id = %s 
                 ORDER BY youtube_id
@@ -339,7 +351,8 @@ class DBSelect:
                     'video_duration': str(row[5]) if row[5] else None,  # Convert TIME to string
                     'video_url': row[6],
                     'video_views': row[7],
-                    'video_likes': row[8]
+                    'video_likes': row[8],
+                    'video_embedding': self._convert_embedding(row[9])
                 }
                 for row in results
             ]
@@ -355,7 +368,7 @@ class DBSelect:
         try:
             query = """
                 SELECT youtube_id, project_id, query_id, video_title, video_description, 
-                       video_duration, video_url, video_views, video_likes 
+                       video_duration, video_url, video_views, video_likes, video_embedding 
                 FROM youtube 
                 WHERE youtube_id = %s
             """
@@ -371,7 +384,8 @@ class DBSelect:
                     'video_duration': str(result[5]) if result[5] else None,
                     'video_url': result[6],
                     'video_views': result[7],
-                    'video_likes': result[8]
+                    'video_likes': result[8],
+                    'video_embedding': self._convert_embedding(result[9])
                 }
             return None
         except Exception as e:
@@ -556,7 +570,7 @@ class DBSelect:
         try:
             query = """
                 SELECT rec_id, project_id, video_title, video_description, 
-                       video_duration, video_url, video_views, video_likes, score, rank_position
+                       video_duration, video_url, video_views, video_likes, score, rank_position, video_embedding
                 FROM youtube_current_recs 
                 WHERE rec_id = %s
             """
@@ -573,7 +587,8 @@ class DBSelect:
                     'video_views': result[6],
                     'video_likes': result[7],
                     'score': result[8],
-                    'rank_position': result[9]
+                    'rank_position': result[9],
+                    'video_embedding': self._convert_embedding(result[10])
                 }
             return None
         except Exception as e:
@@ -588,7 +603,7 @@ class DBSelect:
         try:
             query = """
                 SELECT rec_id, project_id, video_title, video_description, 
-                       video_duration, video_url, video_views, video_likes, score, rank_position
+                       video_duration, video_url, video_views, video_likes, score, rank_position, video_embedding
                 FROM youtube_current_recs 
                 WHERE project_id = %s 
                 ORDER BY rec_id
@@ -606,7 +621,8 @@ class DBSelect:
                     'video_views': row[6],
                     'video_likes': row[7],
                     'score': row[8],
-                    'rank_position': row[9]
+                    'rank_position': row[9],
+                    'video_embedding': self._convert_embedding(row[10])
                 }
                 for row in results
             ]
