@@ -5,45 +5,7 @@ from typing import List, Dict, Set, Optional, Tuple
 
 from src.db.connector import Connector
 from src.db.db_crud.select_db import DBSelect
-
-_STOP = {
-    "a","an","the","and","or","but","if","then","else","for","to","of","in","on","by","with",
-    "from","into","at","is","are","was","were","be","been","being","as","it","this","that",
-    "these","those","we","you","they","he","she","i","me","my","our","your","their","them",
-    "about","over","under","between","within","without","than","so","do","does","did","done",
-    "can","could","should","would","may","might","will","just","not","no","yes"
-}
-_WORD_RE = re.compile(r"[a-z0-9]+")
-
-def _tokenize(text: str) -> List[str]:
-    if not text:
-        return []
-    text = text.lower()
-    toks = _WORD_RE.findall(text)
-    return [t for t in toks if len(t) > 2 and t not in _STOP]
-
-def _dur_bucket(seconds: Optional[int]) -> Optional[str]:
-    if seconds is None: return None
-    if seconds <  5*60: return "dur:xs"
-    if seconds < 10*60: return "dur:s"
-    if seconds < 20*60: return "dur:m"
-    if seconds < 40*60: return "dur:l"
-    return "dur:xl"
-
-def _log_bucket(n: Optional[int], prefix: str) -> Optional[str]:
-    if n is None: return None
-    if n >= 10_000_000: return f"{prefix}:1e7+"
-    if n >=  1_000_000: return f"{prefix}:1e6+"
-    if n >=    100_000: return f"{prefix}:1e5+"
-    if n >=     10_000: return f"{prefix}:1e4+"
-    if n >=      1_000: return f"{prefix}:1e3+"
-    return None
-
-def _jaccard(A: Set[str], B: Set[str]) -> float:
-    if not A or not B: return 0.0
-    inter = len(A & B)
-    union = len(A | B)
-    return inter / union if union else 0.0
+from src.jaccard_coefficient.features import Features
 
 @dataclass
 class ScoredItem:
@@ -60,11 +22,17 @@ class JaccardVideoRecommender:
     """
     def __init__(self, connector: Connector):
         self.cx = connector
+        self.features = Features()
         self.db_select = DBSelect()
         if self.cx.cursor is None:
             self.cx.open_connection()
 
-    # ---------------- Public methods ----------------
+    def jaccard_coefficient(self, A: Set[str], B: Set[str]) -> float:
+        if not A or not B: return 0.0
+        inter = len(A & B)
+        union = len(A | B)
+        return inter / union if union else 0.0
+    
     def update_features(self, project_id: Optional[int] = None) -> None:
         """
         Refresh derived features for projects and persisted youtube items.
@@ -89,10 +57,9 @@ class JaccardVideoRecommender:
 
         scored: List[Tuple[int, str, Optional[str], float]] = []
         for r in cand_rows:
-            # r format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
             feats = self._youtube_features_from_rec_row(r)
-            pos = _jaccard(proj_feats, feats)
-            neg = _jaccard(disliked_feats, feats) if disliked_feats else 0.0
+            pos = self.jaccard_coefficient(proj_feats, feats)
+            neg = self.jaccard_coefficient(disliked_feats, feats) if disliked_feats else 0.0
             s = max(0.0, pos - dislike_weight * neg)
             scored.append((r[0], r[1], r[4], s))
 
@@ -291,7 +258,7 @@ class JaccardVideoRecommender:
             row[4] or "",  # queries_text
             row[5] or "",  # special_instructions
         ])
-        feats = {f"qtok:{t}" for t in _tokenize(txt)}
+        feats = {f"qtok:{t}" for t in tokenize(txt)}
         low = txt.lower()
         if re.search(r"\bshort\b", low): feats.add("pref:dur_short")
         if re.search(r"\brecent\b|\bnew\b|\b202[3-9]\b", low): feats.add("pref:rec_new")
