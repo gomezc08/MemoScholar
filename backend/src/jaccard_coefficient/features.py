@@ -1,23 +1,5 @@
-import re
-from typing import Optional, Set, List, Dict
+from typing import Optional, List
 from datetime import datetime, timezone
-
-_STOP = {
-    "a","an","the","and","or","but","if","then","else","for","to","of","in","on","by","with",
-    "from","into","at","is","are","was","were","be","been","being","as","it","this","that",
-    "these","those","we","you","they","he","she","i","me","my","our","your","their","them",
-    "about","over","under","between","within","without","than","so","do","does","did","done",
-    "can","could","should","would","may","might","will","just","not","no","yes"
-}
-_WORD_RE = re.compile(r"[a-z0-9]+")
-
-def _tokenize(text: str) -> List[str]:
-    """Extract meaningful tokens from text for feature generation"""
-    if not text:
-        return []
-    text = text.lower()
-    toks = _WORD_RE.findall(text)
-    return [t for t in toks if len(t) > 2 and t not in _STOP]
 
 def _dur_bucket(seconds: Optional[int]) -> Optional[str]:
     """Bucket duration into short/medium/long"""
@@ -51,7 +33,9 @@ def _pop_bucket(views: Optional[int]) -> Optional[str]:
 class Features:
     """
     Feature extraction for videos. Each feature is returned as a tuple (category, feature_value)
-    where category is one of: 'dur', 'fresh', 'pop', 'type', 'tok', 'kp', 'emb'
+    where category is one of: 'dur', 'fresh', 'pop', 'type', 'emb'
+    
+    Note: Token-based features removed to focus on semantic similarity with embeddings.
     """
     
     @staticmethod
@@ -75,21 +59,16 @@ class Features:
         return "sem:low"
     
     @staticmethod
-    def tokenize(text: str) -> List[str]:
-        """Extract tokens for feature generation"""
-        return _tokenize(text)
-    
-    @staticmethod
     def video_features(
         seconds: Optional[int],
         published_at: Optional[datetime],
         views: Optional[int],
-        sem_score: Optional[float],
-        text_content: Optional[str]
+        sem_score: Optional[float]
     ) -> List[tuple[str, str]]:
         """
         Generate features for a video.
         Returns list of (category, feature) tuples.
+        Focuses on non-text features and semantic similarity.
         """
         features = []
         
@@ -111,13 +90,7 @@ class Features:
         # Type feature (always youtube)
         features.append(('type', 'youtube'))
         
-        # Text tokens feature
-        if text_content:
-            tokens = _tokenize(text_content)
-            for tok in tokens:
-                features.append(('tok', tok))
-        
-        # Semantic similarity feature
+        # Semantic similarity feature (from embedding similarity)
         sem = Features.sem_bucket(sem_score)
         if sem:
             features.append(('emb', sem))
@@ -126,34 +99,16 @@ class Features:
     
     @staticmethod
     def project_features(
-        topic: Optional[str],
-        objective: Optional[str],
-        guidelines: Optional[str],
-        queries_text: Optional[str],
-        special_instructions: Optional[str],
         sem_score: Optional[float]
     ) -> List[tuple[str, str]]:
         """
         Generate features for a project.
         Returns list of (category, feature) tuples.
+        Projects only need semantic similarity feature from their embedding.
         """
         features = []
         
-        # Combine all text content
-        text_content = " ".join([
-            topic or "",
-            objective or "",
-            guidelines or "",
-            queries_text or "",
-            special_instructions or ""
-        ])
-        
-        # Text tokens
-        tokens = _tokenize(text_content)
-        for tok in tokens:
-            features.append(('tok', tok))
-        
-        # Semantic similarity feature
+        # Semantic similarity feature (from embedding)
         sem = Features.sem_bucket(sem_score)
         if sem:
             features.append(('emb', sem))

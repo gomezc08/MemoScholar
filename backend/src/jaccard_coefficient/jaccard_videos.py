@@ -6,6 +6,7 @@ import numpy as np
 
 from src.db.connector import Connector
 from src.db.db_crud.select_db import DBSelect
+from src.db.db_crud.insert import DBInsert
 from src.text_embedding.embedding import Embedding
 from src.jaccard_coefficient.features import Features
 
@@ -38,11 +39,10 @@ class JaccardVideoRecommender:
     
     # Feature category weights (alpha values)
     WEIGHTS = {
-        'emb': 0.4,   # semantic similarity
-        'tok': 0.3,   # text tokens
-        'dur': 0.1,   # duration
+        'emb': 0.6,   # semantic similarity (primary)
+        'dur': 0.15,  # duration
         'fresh': 0.1, # freshness
-        'pop': 0.05,  # popularity
+        'pop': 0.1,   # popularity
         'type': 0.05  # type
     }
     
@@ -50,6 +50,7 @@ class JaccardVideoRecommender:
         self.cx = connector
         self.features = Features()
         self.db_select = DBSelect()
+        self.db_insert = DBInsert()
         self.embedding = Embedding()
         if self.cx.cursor is None:
             self.cx.open_connection()
@@ -271,22 +272,16 @@ class JaccardVideoRecommender:
                 title = rec_row[4]
                 description = rec_row[5]
                 
-                # Generate features
-                text_content = f"{title or ''} {description or ''}"
+                # Generate features (no text_content needed, semantic similarity only)
                 features_list = self.features.video_features(
                     seconds=duration_sec,
                     published_at=None,
                     views=views,
-                    sem_score=None,
-                    text_content=text_content
+                    sem_score=None  # Placeholder for actual similarity calculation
                 )
                 
-                # Insert features
-                if features_list:
-                    cur.executemany(
-                        "INSERT INTO youtube_current_recs_features(rec_id, category, feature) VALUES (%s, %s, %s)",
-                        [(rec_id, cat, feat) for cat, feat in features_list]
-                    )
+                # Insert features using db_crud
+                self.db_insert.insert_rec_features(rec_id, features_list)
             
             self.cx.cnx.commit()
 
@@ -299,43 +294,26 @@ class JaccardVideoRecommender:
         """
         cur = self.cx.cursor
         
-        # Get project information
+        # Get project embedding
         cur.execute("""
-            SELECT p.project_id, p.topic, p.objective, p.guidelines, p.embedding,
-                   q.queries_text, q.special_instructions
+            SELECT p.embedding
             FROM project p
-            LEFT JOIN (
-                SELECT project_id, queries_text, special_instructions
-                FROM queries
-                WHERE project_id = %s
-                ORDER BY query_id DESC
-                LIMIT 1
-            ) q ON q.project_id = p.project_id
             WHERE p.project_id = %s
-        """, (project_id, project_id))
+        """, (project_id,))
         
         proj_row = cur.fetchone()
         if not proj_row:
             return {cat: set() for cat in self.WEIGHTS.keys()}
         
-        # Extract features using the new Features class
-        topic = proj_row[1]
-        objective = proj_row[2]
-        guidelines = proj_row[3]
-        embedding = proj_row[4]
-        queries_text = proj_row[5]
-        special_instructions = proj_row[6]
-        
         # Calculate semantic similarity score if embedding exists
+        embedding = proj_row[0]
         sem_score = None
         if embedding is not None:
             # Embedding calculation would go here
             # For now, we'll use a placeholder
             sem_score = 0.5  # Placeholder, should calculate actual similarity
         
-        features_list = self.features.project_features(
-            topic, objective, guidelines, queries_text, special_instructions, sem_score
-        )
+        features_list = self.features.project_features(sem_score)
         
         # Organize by category
         features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
@@ -431,33 +409,23 @@ class JaccardVideoRecommender:
         rows = cur.fetchall()
         return rows[0] if rows else None
 
-    def _upsert_project_features(self, project_id: int) -> None:
-        """Update project features in the database."""
-        # For now, we'll store project features in a different way
-        # Since the schema doesn't have a project_features table with category
-        # We'll skip this for now and compute features on-the-fly
-        pass
-
-    def _upsert_all_project_features(self) -> None:
-        """Update features for all projects."""
-        # Similar to _upsert_project_features
-        pass
 
     def _upsert_youtube_features(self, project_id: Optional[int] = None) -> None:
         """
         Update features for YouTube videos in the youtube_features table.
+        Uses db_crud functions instead of direct cursor operations.
         """
         cur = self.cx.cursor
         if project_id is None:
             cur.execute("""
                 SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
-                       video_views, video_likes, video_title, video_description
+                       video_views, video_likes, video_embedding
                 FROM youtube
             """)
         else:
             cur.execute("""
                 SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
-                       video_views, video_likes, video_title, video_description
+                       video_views, video_likes, video_embedding
                 FROM youtube
                 WHERE project_id = %s
             """, (project_id,))
@@ -468,30 +436,19 @@ class JaccardVideoRecommender:
             duration_sec = row[1]
             views = row[2]
             likes = row[3]
-            title = row[4]
-            description = row[5]
-            
-            # Clear existing features
-            cur.execute("DELETE FROM youtube_features WHERE youtube_id = %s", (youtube_id,))
+            embedding = row[4]
             
             # Generate features
-            text_content = f"{title or ''} {description or ''}"
+            sem_score = None  # Placeholder for actual similarity calculation
             features_list = self.features.video_features(
                 seconds=duration_sec,
-                published_at=None,  # Not available in current data
+                published_at=None,
                 views=views,
-                sem_score=None,  # Would need to calculate from embedding
-                text_content=text_content
+                sem_score=sem_score
             )
             
-            # Insert features
-            if features_list:
-                cur.executemany(
-                    "INSERT INTO youtube_features(youtube_id, category, feature) VALUES (%s, %s, %s)",
-                    [(youtube_id, cat, feat) for cat, feat in features_list]
-                )
-        
-        self.cx.cnx.commit()
+            # Insert features using db_crud
+            self.db_insert.insert_youtube_features(youtube_id, features_list)
 
     def _fetch_current_recs(self, project_id: int) -> List[Tuple]:
         """Fetch staged candidates."""

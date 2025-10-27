@@ -343,3 +343,72 @@ class DBInsert:
             return []
         finally:
             self.connector.close_connection()
+    
+    def insert_youtube_features(self, youtube_id, features_list):
+        """
+        Insert features into youtube_features table.
+        features_list should be a list of tuples (category, feature_value).
+        """
+        self.connector.open_connection()
+        try:
+            # Delete existing features first
+            self.connector.cursor.execute("DELETE FROM youtube_features WHERE youtube_id = %s", (youtube_id,))
+            
+            # Insert new features
+            if features_list:
+                self.connector.cursor.executemany(
+                    "INSERT INTO youtube_features(youtube_id, category, feature) VALUES (%s, %s, %s)",
+                    [(youtube_id, cat, feat) for cat, feat in features_list]
+                )
+            self.connector.cnx.commit()
+            return True
+        except Exception as e:
+            print("insert_youtube_features error:", e)
+            self.connector.cnx.rollback()
+            return False
+        finally:
+            self.connector.close_connection()
+    
+    def insert_rec_features(self, rec_id, features_list):
+        """
+        Insert features into youtube_current_recs_features table.
+        features_list should be a list of tuples (category, feature_value).
+        """
+        self.connector.open_connection()
+        try:
+            # Delete existing features first
+            self.connector.cursor.execute("DELETE FROM youtube_current_recs_features WHERE rec_id = %s", (rec_id,))
+            
+            # Insert new features
+            if features_list:
+                self.connector.cursor.executemany(
+                    "INSERT INTO youtube_current_recs_features(rec_id, category, feature) VALUES (%s, %s, %s)",
+                    [(rec_id, cat, feat) for cat, feat in features_list]
+                )
+            self.connector.cnx.commit()
+            return True
+        except Exception as e:
+            print("insert_rec_features error:", e)
+            self.connector.cnx.rollback()
+            return False
+        finally:
+            self.connector.close_connection()
+    
+    def delete_rec_features_for_project(self, project_id):
+        """
+        Delete features for all recommendations in youtube_current_recs_features for a project.
+        """
+        self.connector.open_connection()
+        try:
+            self.connector.cursor.execute("""
+                DELETE FROM youtube_current_recs_features 
+                WHERE rec_id IN (SELECT rec_id FROM youtube_current_recs WHERE project_id = %s)
+            """, (project_id,))
+            self.connector.cnx.commit()
+            return True
+        except Exception as e:
+            print("delete_rec_features_for_project error:", e)
+            self.connector.cnx.rollback()
+            return False
+        finally:
+            self.connector.close_connection()
