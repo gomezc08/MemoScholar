@@ -1,8 +1,8 @@
 -- Drop in FK-safe order
 DROP TABLE IF EXISTS likes;
-DROP TABLE IF EXISTS youtube_current_recs_features;
 DROP TABLE IF EXISTS youtube_current_recs;
-DROP TABLE IF EXISTS youtube_features;
+DROP TABLE IF EXISTS item_features;
+DROP TABLE IF EXISTS project_features;
 DROP TABLE IF EXISTS youtube;
 DROP TABLE IF EXISTS paperauthors;
 DROP TABLE IF EXISTS authors;
@@ -82,7 +82,7 @@ CREATE TABLE youtube (
   FOREIGN KEY (query_id)   REFERENCES queries(query_id)  ON DELETE SET NULL
 );
 
--- Staging area for per-project recommendation candidates (20 at a time)
+-- Staging area for per-project recommendation candidates (15 at a time)
 CREATE TABLE youtube_current_recs (
   rec_id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   project_id      BIGINT UNSIGNED NOT NULL,
@@ -99,22 +99,20 @@ CREATE TABLE youtube_current_recs (
   FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
--- YouTube Feautures
-CREATE TABLE youtube_features (
-	youtube_feature_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    youtube_id         BIGINT UNSIGNED NOT NULL,
-    category           ENUM('dur','fresh','pop','type','tok','kp','emb') NOT NULL,
-    feature            VARCHAR(64) NOT NULL,
-    FOREIGN KEY (youtube_id) REFERENCES youtube(youtube_id) ON DELETE CASCADE
+-- Feature stores for Jaccard
+CREATE TABLE project_features (
+  project_id BIGINT UNSIGNED NOT NULL,
+  feature    VARCHAR(255) NOT NULL,
+  PRIMARY KEY (project_id, feature),
+  INDEX idx_pf_project_id (project_id),
+  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
--- Staging area for per-project recommendation candidates features (20 at a time)
-CREATE TABLE youtube_current_recs_features (
-	rec_feature_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    rec_id         BIGINT UNSIGNED NOT NULL,
-    category           ENUM('dur','fresh','pop','type','tok','kp','emb') NOT NULL,
-    feature            VARCHAR(64) NOT NULL,
-    FOREIGN KEY (rec_id) REFERENCES youtube_current_recs(rec_id) ON DELETE CASCADE
+CREATE TABLE item_features (
+  target_type VARCHAR(20) CHECK (target_type IN ('youtube', 'paper')),
+  target_id   BIGINT UNSIGNED NOT NULL,  -- must match youtube_id/paper_id
+  feature     VARCHAR(255) NOT NULL,
+  PRIMARY KEY (target_type, target_id, feature)
 );
 
 -- Likes
