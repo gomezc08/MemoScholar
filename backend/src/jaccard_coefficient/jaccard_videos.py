@@ -1,12 +1,15 @@
 # src/jaccard_coefficient/jaccard_videos.py
 from dataclasses import dataclass
 from typing import List, Dict, Set, Optional, Tuple
+import logging
 
 from src.db.connector import Connector
 from src.db.db_crud.select_db import DBSelect
 from src.db.db_crud.insert import DBInsert
 from src.text_embedding.embedding import Embedding
 from src.jaccard_coefficient.features import Features
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ScoredItem:
@@ -47,11 +50,20 @@ class JaccardVideoRecommender:
     def __init__(self, connector: Connector):
         self.cx = connector
         self.features = Features()
+        # Create DB instances but they'll use the shared connector
         self.db_select = DBSelect()
         self.db_insert = DBInsert()
         self.embedding = Embedding()
         if self.cx.cursor is None:
             self.cx.open_connection()
+        
+        # Share the open connection with DBSelect and DBInsert
+        if self.cx.cursor:
+            self.db_select.connector = self.cx
+            self.db_insert.connector = self.cx
+            # Disable connection management for shared connection
+            self.db_select.manage_connection = False
+            self.db_insert.manage_connection = False
 
     def weighted_jaccard(self, features_A: Dict[str, Set[str]], features_B: Dict[str, Set[str]]) -> float:
         """
@@ -106,6 +118,11 @@ class JaccardVideoRecommender:
         for r in cand_rows:
             # Extract features from candidate row
             cand_features = self._extract_features_from_rec_row(r)
+            
+            # Debug: log features for first video only
+            if len(scored) == 0:
+                logger.info(f"DEBUG: Project features by category: {proj_features}")
+                logger.info(f"DEBUG: First candidate features by category: {cand_features}")
             
             # Calculate J^+ (positive jaccard)
             pos_score = self.weighted_jaccard(proj_features, cand_features)
@@ -421,9 +438,6 @@ class JaccardVideoRecommender:
                 views=views,
                 sem_score=None
             )
-            
-            # Debug: print generated features
-            print(f"DEBUG: Generated features for youtube_id={youtube_id}: {features_list}")
             
             # Insert features using db_crud
             self.db_insert.insert_youtube_features(youtube_id, features_list)

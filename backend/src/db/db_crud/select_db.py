@@ -10,6 +10,7 @@ from src.db.connector import Connector
 class DBSelect:
     def __init__(self):
         self.connector = Connector()
+        self.manage_connection = True  # Set to False to skip opening/closing connections
     
     def _convert_embedding(self, embedding):
         """Convert embedding array to list for JSON serialization"""
@@ -21,7 +22,8 @@ class DBSelect:
     
     def get_user(self, user_id):
         """Get a single user by ID"""
-        self.connector.open_connection()
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             query = "SELECT user_id, name, email FROM users WHERE user_id = %s"
             self.connector.cursor.execute(query, (user_id,))
@@ -562,11 +564,13 @@ class DBSelect:
             print(f"get_complete_project_data error: {e}")
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def get_youtube_video_from_youtube_current_recs(self, rec_id):
         """Get a single YouTube video from youtube_current_recs by rec_id"""
-        self.connector.open_connection()
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             query = """
                 SELECT rec_id, project_id, video_title, video_description, 
@@ -595,7 +599,8 @@ class DBSelect:
             print(f"get_youtube_video_from_youtube_current_recs error: {e}")
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def get_project_youtube_current_recs(self, project_id):
         """Get all YouTube videos from youtube_current_recs for a project"""

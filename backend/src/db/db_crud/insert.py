@@ -10,9 +10,11 @@ from src.db.connector import Connector
 class DBInsert:
     def __init__(self):
         self.connector = Connector()
+        self.manage_connection = True  # Set to False to skip opening/closing connections
 
     def create_user(self, name, email):
-        self.connector.open_connection()
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             query = "INSERT INTO users (name, email) VALUES (%s, %s)"
             values = (name, email)
@@ -25,7 +27,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def create_project(self, user_id, topic, objective, guidelines, embedding):
         """Note: user_id is REQUIRED by schema."""
@@ -55,7 +58,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def create_query(self, project_id, queries_text, special_instructions=None):
         self.connector.open_connection()
@@ -71,7 +75,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def create_paper(self, project_id, query_id, paper_title, paper_summary, published_year, pdf_link):
         self.connector.open_connection()
@@ -90,7 +95,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def create_author(self, name):
         self.connector.open_connection()
@@ -106,7 +112,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def get_or_create_author(self, name):
         """
@@ -132,7 +139,8 @@ class DBInsert:
             print("get_or_create_author error:", e)
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def add_paper_author(self, paper_id, author_id):
         self.connector.open_connection()
@@ -148,7 +156,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def create_paper_with_authors(self, project_id, query_id, paper_title, paper_summary, published_year, pdf_link, authors_list):
         """
@@ -205,7 +214,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def create_like(self, project_id, target_type, target_id, isLiked):
         """
@@ -270,7 +280,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
 
     def insert_youtube_current_recs(self, project_id, videos_list):
         """
@@ -336,13 +347,50 @@ class DBInsert:
                 inserted_ids.append(self.connector.cursor.lastrowid)
             
             self.connector.cnx.commit()
+            
+            # Now generate features for each inserted rec
+            from src.jaccard_coefficient.features import Features
+            features_gen = Features()
+            
+            # Fetch the recs we just inserted
+            self.connector.cursor.execute("""
+                SELECT rec_id, TIME_TO_SEC(video_duration) AS video_duration_sec, 
+                       video_views, video_likes
+                FROM youtube_current_recs 
+                WHERE project_id = %s
+            """, (project_id,))
+            
+            recs = self.connector.cursor.fetchall()
+            for rec in recs:
+                rec_id = rec[0]
+                duration_sec = rec[1]
+                views = rec[2]
+                likes = rec[3]
+                
+                # Generate features
+                features_list = features_gen.video_features(
+                    seconds=duration_sec,
+                    published_at=None,
+                    views=views,
+                    sem_score=None
+                )
+                
+                # Insert features
+                if features_list:
+                    self.connector.cursor.executemany(
+                        "INSERT INTO youtube_current_recs_features(rec_id, category, feature) VALUES (%s, %s, %s)",
+                        [(rec_id, cat, feat) for cat, feat in features_list]
+                    )
+            
+            self.connector.cnx.commit()
             return inserted_ids
         except Exception as e:
             print("insert_youtube_current_recs error:", e)
             self.connector.cnx.rollback()
             return []
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def insert_youtube_features(self, youtube_id, features_list):
         """
@@ -367,14 +415,16 @@ class DBInsert:
             self.connector.cnx.rollback()
             return False
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def insert_rec_features(self, rec_id, features_list):
         """
         Insert features into youtube_current_recs_features table.
         features_list should be a list of tuples (category, feature_value).
         """
-        self.connector.open_connection()
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             # Delete existing features first
             self.connector.cursor.execute("DELETE FROM youtube_current_recs_features WHERE rec_id = %s", (rec_id,))
@@ -392,7 +442,8 @@ class DBInsert:
             self.connector.cnx.rollback()
             return False
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def delete_rec_features_for_project(self, project_id):
         """
@@ -411,4 +462,5 @@ class DBInsert:
             self.connector.cnx.rollback()
             return False
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
