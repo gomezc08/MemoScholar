@@ -33,9 +33,9 @@ CREATE TABLE project (
 -- Project Embeddings
 CREATE TABLE project_embeddings (
 	project_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    project_id BIGINT UNSIGNED NOT NULL,
-    embedding  VECTOR(1536),
-    FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
+  project_id BIGINT UNSIGNED NOT NULL,
+  embedding  VECTOR(1536),
+  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
 -- Queries
@@ -93,9 +93,9 @@ CREATE TABLE youtube (
 -- Project Embeddings
 CREATE TABLE youtube_embeddings (
 	youtube_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    project_id BIGINT UNSIGNED NOT NULL,
-    embedding  VECTOR(1536),
-    FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
+  project_id BIGINT UNSIGNED NOT NULL,
+  embedding  VECTOR(1536),
+  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
 -- Staging area for per-project recommendation candidates (20 at a time)

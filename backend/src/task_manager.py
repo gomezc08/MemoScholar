@@ -429,8 +429,7 @@ class TaskManager:
             data['user_id'], 
             data['topic'], 
             data['objective'], 
-            data['guidelines'],
-            embedding
+            data['guidelines']
         )
         
         if project_id is None:
@@ -439,6 +438,8 @@ class TaskManager:
             raise RuntimeError(error_msg)
         
         self.logger.info(f"Created project with ID: {project_id}")
+        # Store project embedding in project_embeddings
+        self.db_insert.create_project_embedding(project_id, embedding)
         return project_id
     
     def _handle_default_query_task(self, data, project_id):
@@ -550,7 +551,6 @@ class TaskManager:
                 video.get('video_description', ''),
                 video.get('video_duration', ''), 
                 video.get('video_url', ''),
-                video.get('video_embedding', []),
                 video.get('video_views', 0), 
                 video.get('video_likes', 0)
             )
