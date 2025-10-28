@@ -3,11 +3,13 @@ DROP TABLE IF EXISTS likes;
 DROP TABLE IF EXISTS youtube_current_recs_features;
 DROP TABLE IF EXISTS youtube_current_recs;
 DROP TABLE IF EXISTS youtube_features;
+DROP TABLE IF EXISTS youtube_embeddings;
 DROP TABLE IF EXISTS youtube;
 DROP TABLE IF EXISTS paperauthors;
 DROP TABLE IF EXISTS authors;
 DROP TABLE IF EXISTS papers;
 DROP TABLE IF EXISTS queries;
+DROP TABLE IF EXISTS project_embeddings;
 DROP TABLE IF EXISTS project;
 DROP TABLE IF EXISTS users;
 
@@ -18,15 +20,22 @@ CREATE TABLE users (
   email   VARCHAR(255) NOT NULL
 ); 
 
--- Project
+-- Projects
 CREATE TABLE project (
   project_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id    BIGINT UNSIGNED NOT NULL,
   topic      VARCHAR(255) NOT NULL,
   objective  TEXT,
   guidelines TEXT,
-  embedding  VECTOR(1536),
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- Project Embeddings
+CREATE TABLE project_embeddings (
+	project_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT UNSIGNED NOT NULL,
+    embedding  VECTOR(1536),
+    FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
 -- Queries
@@ -77,9 +86,16 @@ CREATE TABLE youtube (
   video_url         VARCHAR(500),
   video_views       BIGINT DEFAULT 0,
   video_likes       BIGINT DEFAULT 0,
-  video_embedding   VECTOR(1536),
   FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE,
   FOREIGN KEY (query_id)   REFERENCES queries(query_id)  ON DELETE SET NULL
+);
+
+-- Project Embeddings
+CREATE TABLE youtube_embeddings (
+	youtube_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT UNSIGNED NOT NULL,
+    embedding  VECTOR(1536),
+    FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
 -- Staging area for per-project recommendation candidates (20 at a time)
