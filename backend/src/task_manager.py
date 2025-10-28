@@ -4,13 +4,21 @@ from src.db.db_crud.insert import DBInsert
 from src.db.db_crud.select_db import DBSelect
 from src.utils.logging_config import get_logger
 from src.db.db_crud.change import DBChange
+from src.db.connector import Connector
 from src.generate_content.create_query import CreateQuery
 from src.text_embedding.embedding import Embedding
 
 class TaskManager:
     def __init__(self):
+        # Shared connector per TaskManager instance
+        self.cx = Connector()
         self.db_insert = DBInsert()
         self.db_select = DBSelect()
+        # Share connector and disable auto connection management
+        self.db_insert.connector = self.cx
+        self.db_select.connector = self.cx
+        self.db_insert.manage_connection = False
+        self.db_select.manage_connection = False
         self.youtube_generator = YoutubeGenerator()
         self.paper_generator = PaperGenerator()
         self.create_query = CreateQuery()
@@ -158,12 +166,7 @@ class TaskManager:
         Returns user data or raises exception on failure.
         """
         try:
-            # Validate required fields
-            required_fields = ['name', 'email']
-            for field in required_fields:
-                if field not in data:
-                    raise ValueError(f"Missing required field: {field}")
-            
+            self.cx.open_connection()
             # Check if user already exists
             existing_user = self.db_select.get_user_by_email(data['email'].strip().lower())
             
@@ -195,6 +198,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_user_signup: {str(e)}")
             raise RuntimeError(f"Failed to handle user signup: {str(e)}")
+        finally:
+            self.cx.close_connection()
     
     def handle_user_login(self, data):
         """
@@ -202,6 +207,7 @@ class TaskManager:
         Returns user data or raises exception on failure.
         """
         try:
+            self.cx.open_connection()
             # Validate required fields
             if 'email' not in data:
                 raise ValueError("Missing required field: email")
@@ -225,6 +231,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_user_login: {str(e)}")
             raise RuntimeError(f"Failed to handle user login: {str(e)}")
+        finally:
+            self.cx.close_connection()
     
     def handle_get_user(self, user_id):
         """
@@ -232,6 +240,7 @@ class TaskManager:
         Returns user data or raises exception on failure.
         """
         try:
+            self.cx.open_connection()
             # Validate user_id
             if not user_id or user_id <= 0:
                 raise ValueError("Invalid user_id provided")
@@ -255,6 +264,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_get_user: {str(e)}")
             raise RuntimeError(f"Failed to get user: {str(e)}")
+        finally:
+            self.cx.close_connection()
     
     def handle_user_projects(self, user_id):
         """
@@ -262,6 +273,7 @@ class TaskManager:
         Returns list of projects or raises exception on failure.
         """
         try:
+            self.cx.open_connection()
             # Validate user_id
             if not user_id or user_id <= 0:
                 raise ValueError("Invalid user_id provided")
@@ -281,6 +293,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_user_projects: {str(e)}")
             raise RuntimeError(f"Failed to get user projects: {str(e)}")
+        finally:
+            self.cx.close_connection()
 
     def handle_get_likes_for_project(self, project_id):
         """
@@ -288,6 +302,7 @@ class TaskManager:
         Returns list of likes or raises exception on failure.
         """
         try:
+            self.cx.open_connection()
             # Validate project_id
             if not project_id or project_id <= 0:
                 raise ValueError("Invalid project_id provided")
@@ -307,6 +322,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_get_likes_for_project: {str(e)}")
             raise RuntimeError(f"Failed to get likes for project: {str(e)}")
+        finally:
+            self.cx.close_connection()
 
     def handle_get_complete_project_data(self, project_id):
         """
@@ -314,6 +331,7 @@ class TaskManager:
         Returns complete project data or raises exception on failure.
         """
         try:
+            self.cx.open_connection()
             # Validate project_id
             if not project_id or project_id <= 0:
                 raise ValueError("Invalid project_id provided")
@@ -333,6 +351,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_get_complete_project_data: {str(e)}")
             raise RuntimeError(f"Failed to get complete project data: {str(e)}")
+        finally:
+            self.cx.close_connection()
 
     def handle_get_youtube_video(self, youtube_id):
         """
@@ -340,6 +360,7 @@ class TaskManager:
         Returns video data or None if not found.
         """
         try:
+            self.cx.open_connection()
             # Validate youtube_id
             if not youtube_id or youtube_id <= 0:
                 raise ValueError("Invalid youtube_id provided")
@@ -360,6 +381,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_get_youtube_video: {str(e)}")
             raise RuntimeError(f"Failed to get YouTube video: {str(e)}")
+        finally:
+            self.cx.close_connection()
 
     def handle_get_youtube_video_from_recs(self, rec_id):
         """
@@ -367,6 +390,7 @@ class TaskManager:
         Returns video data or None if not found.
         """
         try:
+            self.cx.open_connection()
             # Validate rec_id
             if not rec_id or rec_id <= 0:
                 raise ValueError("Invalid rec_id provided")
@@ -387,6 +411,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_get_youtube_video_from_recs: {str(e)}")
             raise RuntimeError(f"Failed to get YouTube video from recs: {str(e)}")
+        finally:
+            self.cx.close_connection()
 
     def handle_get_paper(self, paper_id):
         """
@@ -394,6 +420,7 @@ class TaskManager:
         Returns paper data or None if not found.
         """
         try:
+            self.cx.open_connection()
             # Validate paper_id
             if not paper_id or paper_id <= 0:
                 raise ValueError("Invalid paper_id provided")
@@ -414,6 +441,8 @@ class TaskManager:
         except Exception as e:
             self.logger.error(f"Unexpected error in handle_get_paper: {str(e)}")
             raise RuntimeError(f"Failed to get paper: {str(e)}")
+        finally:
+            self.cx.close_connection()
 
     
     def _handle_project_task(self, data):
