@@ -8,6 +8,10 @@ class Connector:
         self.cursor = None
     
     def open_connection(self):
+        # Don't reconnect if already connected
+        if self.cnx is not None and self.cnx.is_connected():
+            return None
+            
         load_dotenv()
         try:
             config = {
@@ -32,6 +36,7 @@ class Connector:
             self.cursor.close()
         if self.cnx:
             self.cnx.close()
+            self.cnx = None  # Clear the reference
             print("CLOSED CONNECTION TO MYSQL")
         else:
             print("NO CONNECTION TO MYSQL")

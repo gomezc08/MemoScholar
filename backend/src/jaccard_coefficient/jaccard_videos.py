@@ -1,49 +1,15 @@
-# src/recs/jaccard_videos.py
-import re
+# src/jaccard_coefficient/jaccard_videos.py
 from dataclasses import dataclass
 from typing import List, Dict, Set, Optional, Tuple
+import logging
 
 from src.db.connector import Connector
 from src.db.db_crud.select_db import DBSelect
+from src.db.db_crud.insert import DBInsert
+from src.text_embedding.embedding import Embedding
+from src.jaccard_coefficient.features import Features
 
-_STOP = {
-    "a","an","the","and","or","but","if","then","else","for","to","of","in","on","by","with",
-    "from","into","at","is","are","was","were","be","been","being","as","it","this","that",
-    "these","those","we","you","they","he","she","i","me","my","our","your","their","them",
-    "about","over","under","between","within","without","than","so","do","does","did","done",
-    "can","could","should","would","may","might","will","just","not","no","yes"
-}
-_WORD_RE = re.compile(r"[a-z0-9]+")
-
-def _tokenize(text: str) -> List[str]:
-    if not text:
-        return []
-    text = text.lower()
-    toks = _WORD_RE.findall(text)
-    return [t for t in toks if len(t) > 2 and t not in _STOP]
-
-def _dur_bucket(seconds: Optional[int]) -> Optional[str]:
-    if seconds is None: return None
-    if seconds <  5*60: return "dur:xs"
-    if seconds < 10*60: return "dur:s"
-    if seconds < 20*60: return "dur:m"
-    if seconds < 40*60: return "dur:l"
-    return "dur:xl"
-
-def _log_bucket(n: Optional[int], prefix: str) -> Optional[str]:
-    if n is None: return None
-    if n >= 10_000_000: return f"{prefix}:1e7+"
-    if n >=  1_000_000: return f"{prefix}:1e6+"
-    if n >=    100_000: return f"{prefix}:1e5+"
-    if n >=     10_000: return f"{prefix}:1e4+"
-    if n >=      1_000: return f"{prefix}:1e3+"
-    return None
-
-def _jaccard(A: Set[str], B: Set[str]) -> float:
-    if not A or not B: return 0.0
-    inter = len(A & B)
-    union = len(A | B)
-    return inter / union if union else 0.0
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ScoredItem:
@@ -54,102 +20,134 @@ class ScoredItem:
 
 class JaccardVideoRecommender:
     """
+    Recommender using weighted semantic similarity-based jaccard coefficient.
+    
+    J^+(P, i) = α_sem * |P^+_sem ∩ I_sem| / |P^+_sem ∪ I_sem|
+              + α_len * |P^+_len ∩ I_len| / |P^+_len ∪ I_len|
+              + α_fresh * |P^+_fresh ∩ I_fresh| / |P^+_fresh ∪ I_fresh|
+              + α_pop * |P^+_pop ∩ I_pop| / |P^+_pop ∪ I_pop|
+              + α_type * |P^+_type ∩ I_type| / |P^+_type ∪ I_type|
+              + α_tok * |P^+_tok ∩ I_tok| / |P^+_tok ∪ I_tok|
+    
+    S(P, i) = J^+(P, i) - λ * J^-(P, i)
+    
     Public API:
       - update_features(project_id: Optional[int] = None) -> None
-      - recommend(project_id: int, topk: int = 5, include_likes: bool = True) -> List[ScoredItem]
+      - recommend(project_id: int, topk: int = 5, include_likes: bool = True) -> List[Dict]
+      - restage_candidates(project_id: int, candidates: List[Dict]) -> None
+      - promote_topk_and_clear(project_id: int, topk: int = 5) -> None
     """
+    
+    # Feature category weights (alpha values)
+    WEIGHTS = {
+        'emb': 0.6,   # semantic similarity (primary)
+        'dur': 0.15,  # duration
+        'fresh': 0.1, # freshness
+        'pop': 0.1,   # popularity
+        'type': 0.05  # type
+    }
+    
     def __init__(self, connector: Connector):
         self.cx = connector
+        self.features = Features()
+        # Create DB instances but they'll use the shared connector
         self.db_select = DBSelect()
+        self.db_insert = DBInsert()
+        self.embedding = Embedding()
         if self.cx.cursor is None:
             self.cx.open_connection()
+        
+        # Share the open connection with DBSelect and DBInsert
+        if self.cx.cursor:
+            self.db_select.connector = self.cx
+            self.db_insert.connector = self.cx
+            # Disable connection management for shared connection
+            self.db_select.manage_connection = False
+            self.db_insert.manage_connection = False
 
-    # ---------------- Public methods ----------------
+    def weighted_jaccard(self, features_A: Dict[str, Set[str]], features_B: Dict[str, Set[str]]) -> float:
+        """
+        Calculate weighted jaccard coefficient across feature categories.
+        
+        Args:
+            features_A: Dict mapping category -> Set of feature values
+            features_B: Dict mapping category -> Set of feature values
+        
+        Returns:
+            Weighted jaccard score
+        """
+        total_score = 0.0
+        
+        for category, weight in self.WEIGHTS.items():
+            A_cat = features_A.get(category, set())
+            B_cat = features_B.get(category, set())
+            
+            # Jaccard for this category
+            intersection = len(A_cat & B_cat)
+            union = len(A_cat | B_cat)
+            
+            if union > 0:
+                jaccard = intersection / union
+                total_score += weight * jaccard
+        
+        return total_score
+
     def update_features(self, project_id: Optional[int] = None) -> None:
         """
-        Refresh derived features for projects and persisted youtube items.
-        Does not compute features for `youtube_current_recs` (computed ad-hoc when scoring).
+        Refresh derived features for persisted YouTube videos.
+        Does not compute features for `youtube_current_recs` (computed when restaging).
+        Note: Project features are computed on-the-fly and don't need updating.
         """
-        if project_id is None:
-            self._upsert_all_project_features()
-            self._upsert_youtube_features(None)
-        else:
-            self._upsert_project_features(project_id)
-            self._upsert_youtube_features(project_id)
+        self._upsert_youtube_features(project_id)
 
-    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, dislike_weight: float = 0.5) -> List[Dict]:
+    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, lambda_dislike: float = 0.5) -> List[Dict]:
         """
         Score current staged candidates in `youtube_current_recs`, update their score/rank,
-        and return the top-k as `ScoredItem`s. Expects up to 15 candidates pre-staged per project.
+        and return the top-k.
         """
-        proj_feats = self._load_project_feature_set(project_id, include_likes=include_likes)
-        proj_feats = self._normalize_project_features_for_video(proj_feats)
-        disliked_feats = self._load_disliked_feature_set(project_id)
+        # Load project features (liked items + project text)
+        proj_features = self._load_project_features(project_id, include_likes=include_likes)
+        
+        # Load disliked features
+        disliked_features = self._load_disliked_features(project_id)
+        
+        # Fetch candidate videos
         cand_rows = self._fetch_current_recs(project_id)
-
+        
         scored: List[Tuple[int, str, Optional[str], float]] = []
         for r in cand_rows:
-            # r format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
-            feats = self._youtube_features_from_rec_row(r)
-            pos = _jaccard(proj_feats, feats)
-            neg = _jaccard(disliked_feats, feats) if disliked_feats else 0.0
-            s = max(0.0, pos - dislike_weight * neg)
-            scored.append((r[0], r[1], r[4], s))
-
+            # Extract features from candidate row
+            cand_features = self._extract_features_from_rec_row(r)
+            
+            # Debug: log features for first video only
+            if len(scored) == 0:
+                logger.info(f"DEBUG: Project features by category: {proj_features}")
+                logger.info(f"DEBUG: First candidate features by category: {cand_features}")
+            
+            # Calculate J^+ (positive jaccard)
+            pos_score = self.weighted_jaccard(proj_features, cand_features)
+            
+            # Calculate J^- (negative jaccard)
+            neg_score = self.weighted_jaccard(disliked_features, cand_features) if disliked_features else 0.0
+            
+            # Calculate final score: S(P, i) = J^+(P, i) - λ * J^-(P, i)
+            final_score = max(0.0, pos_score - lambda_dislike * neg_score)
+            
+            # r[0] = rec_id, r[1] = video_title, r[4] = video_url
+            scored.append((r[0], r[1], r[4], final_score))
+        
         # Persist scores and ranks
         scored_sorted = sorted(scored, key=lambda x: x[3], reverse=True)
         self._update_rec_scores_and_ranks(project_id, scored_sorted)
-
+        
         # Return full YouTube video details with score
         result: List[Dict] = []
         for rec_id, title, url, s in scored_sorted[:topk]:
             video_details = self.db_select.get_youtube_video_from_youtube_current_recs(rec_id)
             if video_details:
-                # Add the calculated score to the video details
                 video_details['calculated_score'] = s
                 result.append(video_details)
         return result
-
-    def _normalize_project_features_for_video(self, feats: Set[str]) -> Set[str]:
-        """
-        Map project-side text tokens (qtok:*) into the same namespace as item tokens (tok:*).
-        This ensures text overlap is measured even before any likes.
-        """
-        norm: Set[str] = set()
-        for f in feats:
-            if f.startswith("qtok:"):
-                norm.add("tok:" + f[len("qtok:"):])
-            else:
-                norm.add(f)
-        return norm
-
-    def _load_disliked_feature_set(self, project_id: int) -> Set[str]:
-        """
-        Aggregate features from all disliked youtube items for this project.
-        """
-        cur = self.cx.cursor
-        cur.execute(
-            """
-            SELECT target_id
-            FROM likes
-            WHERE project_id=%s AND target_type='youtube' AND isLiked = FALSE
-            """,
-            (project_id,),
-        )
-        disliked_ids = [r[0] for r in cur.fetchall()]
-        if not disliked_ids:
-            return set()
-        feats: Set[str] = set()
-        for tid in disliked_ids:
-            cur.execute(
-                """
-                SELECT feature FROM item_features
-                WHERE target_type='youtube' AND target_id=%s
-                """,
-                (tid,),
-            )
-            feats |= {r[0] for r in cur.fetchall()}
-        return feats
 
     def promote_topk_and_clear(self, project_id: int, topk: int = 5) -> None:
         """
@@ -157,13 +155,13 @@ class JaccardVideoRecommender:
         then clear all `youtube_current_recs` for the project.
         """
         cur = self.cx.cursor
-        # Select top-k by rank (computed by recommend)
+        # Select top-k by rank
         cur.execute(
             """
-            SELECT rec_id, video_title, video_description, video_duration, video_url, video_views, video_likes
+            SELECT rec_id, video_title, video_description, video_duration, video_url, video_views, video_likes, video_embedding
             FROM youtube_current_recs
             WHERE project_id=%s
-            ORDER BY rank ASC NULLS LAST, score DESC
+            ORDER BY rank_position ASC NULLS LAST, score DESC
             LIMIT %s
             """,
             (project_id, topk),
@@ -172,27 +170,28 @@ class JaccardVideoRecommender:
         if top_rows:
             cur.executemany(
                 """
-                INSERT INTO youtube(project_id, query_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
-                VALUES (%s, NULL, %s, %s, %s, %s, %s, %s)
+                INSERT INTO youtube(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes, video_embedding)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, STRING_TO_VECTOR(%s))
                 """,
                 [
                     (
                         project_id,
-                        r[1],  # title
-                        r[2],  # description
-                        r[3],  # duration (TIME)
-                        r[4],  # url
-                        r[5],  # views
-                        r[6],  # likes
+                        r[1],  # video_title
+                        r[2],  # video_description
+                        r[3],  # video_duration
+                        r[4],  # video_url
+                        r[5],  # video_views
+                        r[6],  # video_likes
+                        str(r[7]) if r[7] else None  # video_embedding
                     )
                     for r in top_rows
                 ],
             )
+        
         # Clear staging
         cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
         
-        # Clean up orphaned likes that reference deleted rec_ids
-        # This prevents orphaned likes from showing up in the management panel
+        # Clean up orphaned likes
         cleanup_query = """
             DELETE FROM likes 
             WHERE project_id = %s 
@@ -208,15 +207,14 @@ class JaccardVideoRecommender:
 
     def restage_candidates(self, project_id: int, candidates: List[Dict]) -> None:
         """
-        Replace current staged candidates for the project with the provided 15 candidates.
-        Each candidate dict may contain: title, description, duration_seconds or duration_time,
-        url, views, likes. Duration can be provided in seconds; it will be converted to TIME.
+        Replace current staged candidates for the project with the provided candidates.
+        Also computes and stores features in youtube_current_recs_features.
         """
         cur = self.cx.cursor
         cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
+        cur.execute("DELETE FROM youtube_current_recs_features WHERE rec_id IN (SELECT rec_id FROM youtube_current_recs WHERE project_id=%s)", (project_id,))
         
-        # Clean up orphaned likes that reference deleted rec_ids
-        # This prevents orphaned likes from showing up in the management panel
+        # Clean up orphaned likes
         cleanup_query = """
             DELETE FROM likes 
             WHERE project_id = %s 
@@ -231,7 +229,6 @@ class JaccardVideoRecommender:
         def _secs_to_time(secs: Optional[int]) -> Optional[str]:
             if secs is None:
                 return None
-            # Format HH:MM:SS
             h = secs // 3600
             m = (secs % 3600) // 60
             s = secs % 60
@@ -241,190 +238,214 @@ class JaccardVideoRecommender:
         for c in candidates:
             title = c.get("title")
             if not title:
-                # Skip invalid entries silently
                 continue
-            desc = c.get("description")
+            desc = c.get("description", "")
             url = c.get("url")
             views = c.get("views", 0)
             likes = c.get("likes", 0)
+            embedding = c.get("embedding")
+            
             if "duration_time" in c and c.get("duration_time") is not None:
                 dur_time = c.get("duration_time")
             else:
                 dur_time = _secs_to_time(c.get("duration_seconds"))
-            rows.append((project_id, title, desc, dur_time, url, views, likes))
+            
+            # Convert embedding to string if it's a list
+            embedding_str = None
+            if embedding is not None:
+                if isinstance(embedding, list):
+                    import json
+                    embedding_str = json.dumps(embedding)
+                else:
+                    embedding_str = str(embedding)
+            
+            rows.append((project_id, title, desc, dur_time, url, views, likes, embedding_str))
 
         if rows:
             cur.executemany(
                 """
-                INSERT INTO youtube_current_recs(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO youtube_current_recs(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes, video_embedding)
+                VALUES (%s,%s,%s,%s,%s,%s,%s, STRING_TO_VECTOR(%s))
                 """,
                 rows,
             )
-        self.cx.cnx.commit()
+            self.cx.cnx.commit()
+            
+            # Now compute features for each inserted candidate
+            cur.execute("SELECT rec_id, TIME_TO_SEC(video_duration) AS video_duration_sec, video_views, video_likes, video_title, video_description FROM youtube_current_recs WHERE project_id=%s", (project_id,))
+            recs = cur.fetchall()
+            
+            for rec_row in recs:
+                rec_id = rec_row[0]
+                duration_sec = rec_row[1]
+                views = rec_row[2]
+                likes = rec_row[3]
+                title = rec_row[4]
+                description = rec_row[5]
+                
+                # Generate features 
+                # Using placeholder sem_score since we don't compute actual similarity yet
+                # The video_features function will default to "sem:mid" if None
+                features_list = self.features.video_features(
+                    seconds=duration_sec,
+                    published_at=None,
+                    views=views,
+                    sem_score=None
+                )
+                
+                # Insert features using db_crud
+                self.db_insert.insert_rec_features(rec_id, features_list)
+            
+            self.cx.cnx.commit()
 
-    # ---------------- Private helpers ----------------
-    def _project_row_with_latest_query(self, project_id: int) -> Optional[Tuple]:
+    # ---------------- Private helpers ---------------- 
+    
+    def _load_project_features(self, project_id: int, include_likes: bool) -> Dict[str, Set[str]]:
+        """
+        Load project features grouped by category.
+        Returns Dict mapping category -> Set of feature values.
+        """
+        cur = self.cx.cursor
+        
+        # Get project embedding
+        cur.execute("""
+            SELECT p.embedding
+            FROM project p
+            WHERE p.project_id = %s
+        """, (project_id,))
+        
+        proj_row = cur.fetchone()
+        if not proj_row:
+            return {cat: set() for cat in self.WEIGHTS.keys()}
+        
+        # Calculate semantic similarity score if embedding exists
+        embedding = proj_row[0]
+        # For now, we don't compute actual similarity, so use None
+        # The features.project_features function will handle it appropriately
+        sem_score = None
+        
+        features_list = self.features.project_features(sem_score)
+        
+        # Organize by category
+        features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
+        for category, feature_value in features_list:
+            features_by_category[category].add(feature_value)
+        
+        # Add liked videos' features
+        if include_likes:
+            cur.execute("""
+                SELECT target_id
+                FROM likes
+                WHERE project_id=%s AND target_type='youtube' AND isLiked = TRUE
+            """, (project_id,))
+            
+            for (target_id,) in cur.fetchall():
+                video_features = self._get_youtube_features(target_id)
+                for category, feature_set in video_features.items():
+                    features_by_category[category] |= feature_set
+        
+        return features_by_category
+
+    def _load_disliked_features(self, project_id: int) -> Optional[Dict[str, Set[str]]]:
+        """Load features from disliked videos."""
         cur = self.cx.cursor
         cur.execute("""
-            SELECT p.project_id, p.topic, p.objective, p.guidelines,
-                   q.queries_text, q.special_instructions
-            FROM project p
-            LEFT JOIN (
-                SELECT project_id, queries_text, special_instructions
-                FROM queries
-                WHERE project_id = %s
-                ORDER BY query_id DESC
-                LIMIT 1
-            ) q ON q.project_id = p.project_id
-            WHERE p.project_id = %s
-        """, (project_id, project_id))
-        rows = cur.fetchall()
-        return rows[0] if rows else None
+            SELECT target_id
+            FROM likes
+            WHERE project_id=%s AND target_type='youtube' AND isLiked = FALSE
+        """, (project_id,))
+        
+        disliked_ids = [r[0] for r in cur.fetchall()]
+        if not disliked_ids:
+            return None
+        
+        features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
+        for target_id in disliked_ids:
+            video_features = self._get_youtube_features(target_id)
+            for category, feature_set in video_features.items():
+                features_by_category[category] |= feature_set
+        
+        return features_by_category
 
-    def _project_features_from_row(self, row: Tuple) -> Set[str]:
-        # row format: (project_id, topic, objective, guidelines, queries_text, special_instructions)
-        txt = " ".join([
-            row[1] or "",  # topic
-            row[2] or "",  # objective
-            row[3] or "",  # guidelines
-            row[4] or "",  # queries_text
-            row[5] or "",  # special_instructions
-        ])
-        feats = {f"qtok:{t}" for t in _tokenize(txt)}
-        low = txt.lower()
-        if re.search(r"\bshort\b", low): feats.add("pref:dur_short")
-        if re.search(r"\brecent\b|\bnew\b|\b202[3-9]\b", low): feats.add("pref:rec_new")
-        return feats
-
-    def _upsert_project_features(self, project_id: int) -> None:
-        row = self._project_row_with_latest_query(project_id)
-        if not row:
-            return
-        feats = self._project_features_from_row(row)
+    def _get_youtube_features(self, youtube_id: int) -> Dict[str, Set[str]]:
+        """Get features for a youtube video from youtube_features table."""
         cur = self.cx.cursor
-        cur.execute("DELETE FROM project_features WHERE project_id = %s", (project_id,))
-        if feats:
-            cur.executemany(
-                "INSERT INTO project_features(project_id, feature) VALUES (%s, %s)",
-                [(project_id, f) for f in feats]
-            )
-        self.cx.cnx.commit()
+        cur.execute("""
+            SELECT category, feature
+            FROM youtube_features
+            WHERE youtube_id = %s
+        """, (youtube_id,))
+        
+        features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
+        for category, feature_value in cur.fetchall():
+            features_by_category[category].add(feature_value)
+        
+        return features_by_category
 
-    def _upsert_all_project_features(self) -> None:
+    def _extract_features_from_rec_row(self, row: Tuple) -> Dict[str, Set[str]]:
+        """
+        Extract features from a youtube_current_recs row.
+        row format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes, embedding)
+        """
+        # Fetch features from youtube_current_recs_features table
+        rec_id = row[0]
         cur = self.cx.cursor
-        cur.execute("SELECT project_id FROM project")
-        pids = [r[0] for r in cur.fetchall()]  # r[0] is project_id
-        for pid in pids:
-            self._upsert_project_features(pid)
-
-    def _youtube_features_from_row(self, row: Tuple) -> Set[str]:
-        # row format: (youtube_id, project_id, video_title, video_description, video_duration_sec, video_views, video_likes)
-        feats = set()
-        text = f"{row[2] or ''} {row[3] or ''}"  # video_title, video_description
-        feats |= {f"tok:{t}" for t in _tokenize(text)}
-        db = _dur_bucket(row[4])  # video_duration_sec
-        if db: feats.add(db)
-        vb = _log_bucket(row[5], "popv")  # video_views
-        lb = _log_bucket(row[6], "popl")  # video_likes
-        if vb: feats.add(vb)
-        if lb: feats.add(lb)
-        feats.add("type:youtube")
-        return feats
-
-    def _youtube_features_from_rec_row(self, row: Tuple) -> Set[str]:
-        """
-        Compute features from a `youtube_current_recs` row.
-        row format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
-        """
-        feats = set()
-        text = f"{row[1] or ''} {row[2] or ''}"  # title + description
-        feats |= {f"tok:{t}" for t in _tokenize(text)}
-        db = _dur_bucket(row[3])  # duration seconds
-        if db: feats.add(db)
-        vb = _log_bucket(row[5], "popv")
-        lb = _log_bucket(row[6], "popl")
-        if vb: feats.add(vb)
-        if lb: feats.add(lb)
-        feats.add("type:youtube")
-        return feats
+        cur.execute("""
+            SELECT category, feature
+            FROM youtube_current_recs_features
+            WHERE rec_id = %s
+        """, (rec_id,))
+        
+        features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
+        for category, feature_value in cur.fetchall():
+            features_by_category[category].add(feature_value)
+        
+        return features_by_category
 
     def _upsert_youtube_features(self, project_id: Optional[int] = None) -> None:
+        """
+        Update features for YouTube videos in the youtube_features table.
+        Uses db_crud functions instead of direct cursor operations.
+        """
         cur = self.cx.cursor
         if project_id is None:
             cur.execute("""
-                SELECT youtube_id, project_id, video_title, video_description,
-                       TIME_TO_SEC(video_duration) AS video_duration_sec,
-                       video_views, video_likes
+                SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
+                       video_views, video_likes, video_embedding
                 FROM youtube
             """)
         else:
             cur.execute("""
-                SELECT youtube_id, project_id, video_title, video_description,
-                       TIME_TO_SEC(video_duration) AS video_duration_sec,
-                       video_views, video_likes
+                SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
+                       video_views, video_likes, video_embedding
                 FROM youtube
                 WHERE project_id = %s
             """, (project_id,))
+        
         rows = cur.fetchall()
-        for r in rows:
-            feats = self._youtube_features_from_row(r)
-            cur.execute("DELETE FROM item_features WHERE target_type='youtube' AND target_id=%s", (r[0],))  # r[0] is youtube_id
-            if feats:
-                cur.executemany(
-                    "INSERT INTO item_features(target_type, target_id, feature) VALUES (%s,%s,%s)",
-                    [("youtube", r[0], f) for f in feats]  # r[0] is youtube_id
-                )
-        self.cx.cnx.commit()
-
-    def _load_project_feature_set(self, project_id: int, include_likes: bool) -> Set[str]:
-        cur = self.cx.cursor
-        cur.execute("SELECT feature FROM project_features WHERE project_id=%s", (project_id,))
-        feats = {r[0] for r in cur.fetchall()}  # r[0] is feature
-        if include_likes:
-            cur.execute("""
-                SELECT target_type, target_id
-                FROM likes
-                WHERE project_id=%s AND isLiked = TRUE
-            """, (project_id,))
-            for lk in cur.fetchall():
-                if lk[0] != "youtube":  # lk[0] is target_type, videos recommender uses only video likes
-                    continue
-                cur.execute("""
-                    SELECT feature FROM item_features
-                    WHERE target_type='youtube' AND target_id=%s
-                """, (lk[1],))  # lk[1] is target_id
-                feats |= {r[0] for r in cur.fetchall()}  # r[0] is feature
-        return feats
-
-    def _load_item_feature_set(self, target_type: str, target_id: int) -> Set[str]:
-        cur = self.cx.cursor
-        cur.execute("""
-            SELECT feature FROM item_features
-            WHERE target_type=%s AND target_id=%s
-        """, (target_type, target_id))
-        return {r[0] for r in cur.fetchall()}  # r[0] is feature
-
-    def _fetch_youtube_candidates(self, project_id: int) -> List[Tuple]:
-        # Legacy: fetch existing persisted youtube items as candidates
-        cur = self.cx.cursor
-        cur.execute(
-            """
-            SELECT youtube_id, video_title, video_url
-            FROM youtube
-            WHERE project_id = %s
-            """,
-            (project_id,),
-        )
-        return cur.fetchall()
+        for row in rows:
+            youtube_id = row[0]
+            duration_sec = row[1]
+            views = row[2]
+            likes = row[3]
+            embedding = row[4]
+            
+            # Generate features
+            # sem_score=None will default to "sem:mid" in the features function
+            features_list = self.features.video_features(
+                seconds=duration_sec,
+                published_at=None,
+                views=views,
+                sem_score=None
+            )
+            
+            # Insert features using db_crud
+            self.db_insert.insert_youtube_features(youtube_id, features_list)
 
     def _fetch_current_recs(self, project_id: int) -> List[Tuple]:
-        """
-        Fetch staged candidates with duration converted to seconds for feature bucketing.
-        """
+        """Fetch staged candidates."""
         cur = self.cx.cursor
-        cur.execute(
-            """
+        cur.execute("""
             SELECT
                 rec_id,
                 video_title,
@@ -432,19 +453,16 @@ class JaccardVideoRecommender:
                 TIME_TO_SEC(video_duration) AS video_duration_sec,
                 video_url,
                 video_views,
-                video_likes
+                video_likes,
+                video_embedding
             FROM youtube_current_recs
             WHERE project_id=%s
-            """,
-            (project_id,),
-        )
+        """, (project_id,))
         results = cur.fetchall()
         return results
 
     def _update_rec_scores_and_ranks(self, project_id: int, scored_sorted: List[Tuple[int, str, Optional[str], float]]) -> None:
-        """
-        Persist score and rank for current staged candidates.
-        """
+        """Persist scores and ranks for current staged candidates."""
         cur = self.cx.cursor
         # Update score
         for rec_id, _title, _url, score in scored_sorted:
