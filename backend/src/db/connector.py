@@ -34,9 +34,8 @@ class Connector:
     def close_connection(self):
         if self.cursor:
             self.cursor.close()
+            self.cursor = None
         if self.cnx:
             self.cnx.close()
-            self.cnx = None  # Clear the reference
             print("CLOSED CONNECTION TO MYSQL")
-        else:
-            print("NO CONNECTION TO MYSQL")
+            self.cnx = None  # Clear the reference
