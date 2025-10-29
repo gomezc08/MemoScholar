@@ -54,8 +54,6 @@ class JaccardVideoRecommender:
         self.db_select = DBSelect()
         self.db_insert = DBInsert()
         self.embedding = Embedding()
-        if self.cx.cursor is None:
-            self.cx.open_connection()
         
         # Share the open connection with DBSelect and DBInsert
         if self.cx.cursor:
@@ -64,6 +62,10 @@ class JaccardVideoRecommender:
             # Disable connection management for shared connection
             self.db_select.manage_connection = False
             self.db_insert.manage_connection = False
+
+    def _ensure_connection(self) -> None:
+        if self.cx.cursor is None or self.cx.cnx is None or not self.cx.cnx.is_connected():
+            self.cx.open_connection()
 
     def weighted_jaccard(self, features_A: Dict[str, Set[str]], features_B: Dict[str, Set[str]]) -> float:
         """
@@ -98,6 +100,7 @@ class JaccardVideoRecommender:
         Does not compute features for `youtube_current_recs` (computed when restaging).
         Note: Project features are computed on-the-fly and don't need updating.
         """
+        self._ensure_connection()
         self._upsert_youtube_features(project_id)
 
     def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, lambda_dislike: float = 0.5) -> List[Dict]:
@@ -105,6 +108,7 @@ class JaccardVideoRecommender:
         Score current staged candidates in `youtube_current_recs`, update their score/rank,
         and return the top-k.
         """
+        self._ensure_connection()
         # Load project features (liked items + project text)
         proj_features = self._load_project_features(project_id, include_likes=include_likes)
         
@@ -154,11 +158,12 @@ class JaccardVideoRecommender:
         Insert the top-k ranked current recommendations into `youtube` as the shown items,
         then clear all `youtube_current_recs` for the project.
         """
+        self._ensure_connection()
         cur = self.cx.cursor
         # Select top-k by rank
         cur.execute(
             """
-            SELECT rec_id, video_title, video_description, video_duration, video_url, video_views, video_likes, video_embedding
+            SELECT rec_id, video_title, video_description, video_duration, video_url, video_views, video_likes
             FROM youtube_current_recs
             WHERE project_id=%s
             ORDER BY rank_position ASC NULLS LAST, score DESC
@@ -170,8 +175,8 @@ class JaccardVideoRecommender:
         if top_rows:
             cur.executemany(
                 """
-                INSERT INTO youtube(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes, video_embedding)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, STRING_TO_VECTOR(%s))
+                INSERT INTO youtube(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 [
                     (
@@ -181,8 +186,7 @@ class JaccardVideoRecommender:
                         r[3],  # video_duration
                         r[4],  # video_url
                         r[5],  # video_views
-                        r[6],  # video_likes
-                        str(r[7]) if r[7] else None  # video_embedding
+                        r[6]   # video_likes
                     )
                     for r in top_rows
                 ],
@@ -210,6 +214,7 @@ class JaccardVideoRecommender:
         Replace current staged candidates for the project with the provided candidates.
         Also computes and stores features in youtube_current_recs_features.
         """
+        self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
         cur.execute("DELETE FROM youtube_current_recs_features WHERE rec_id IN (SELECT rec_id FROM youtube_current_recs WHERE project_id=%s)", (project_id,))
@@ -243,29 +248,20 @@ class JaccardVideoRecommender:
             url = c.get("url")
             views = c.get("views", 0)
             likes = c.get("likes", 0)
-            embedding = c.get("embedding")
+            # embedding removed from staging table
             
             if "duration_time" in c and c.get("duration_time") is not None:
                 dur_time = c.get("duration_time")
             else:
                 dur_time = _secs_to_time(c.get("duration_seconds"))
             
-            # Convert embedding to string if it's a list
-            embedding_str = None
-            if embedding is not None:
-                if isinstance(embedding, list):
-                    import json
-                    embedding_str = json.dumps(embedding)
-                else:
-                    embedding_str = str(embedding)
-            
-            rows.append((project_id, title, desc, dur_time, url, views, likes, embedding_str))
+            rows.append((project_id, title, desc, dur_time, url, views, likes))
 
         if rows:
             cur.executemany(
                 """
-                INSERT INTO youtube_current_recs(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes, video_embedding)
-                VALUES (%s,%s,%s,%s,%s,%s,%s, STRING_TO_VECTOR(%s))
+                INSERT INTO youtube_current_recs(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
                 """,
                 rows,
             )
@@ -305,23 +301,21 @@ class JaccardVideoRecommender:
         Load project features grouped by category.
         Returns Dict mapping category -> Set of feature values.
         """
+        self._ensure_connection()
         cur = self.cx.cursor
         
-        # Get project embedding
+        # Fetch project embedding from project_embeddings (if needed for sem_score in future)
         cur.execute("""
-            SELECT p.embedding
-            FROM project p
-            WHERE p.project_id = %s
+            SELECT embedding FROM project_embeddings
+            WHERE project_id=%s
+            ORDER BY project_embedding_id DESC
+            LIMIT 1
         """, (project_id,))
-        
         proj_row = cur.fetchone()
-        if not proj_row:
+        if proj_row is None:
             return {cat: set() for cat in self.WEIGHTS.keys()}
         
-        # Calculate semantic similarity score if embedding exists
-        embedding = proj_row[0]
-        # For now, we don't compute actual similarity, so use None
-        # The features.project_features function will handle it appropriately
+        # For now, we don't compute actual similarity; use None and rely on bucketed features
         sem_score = None
         
         features_list = self.features.project_features(sem_score)
@@ -348,6 +342,7 @@ class JaccardVideoRecommender:
 
     def _load_disliked_features(self, project_id: int) -> Optional[Dict[str, Set[str]]]:
         """Load features from disliked videos."""
+        self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
             SELECT target_id
@@ -369,6 +364,7 @@ class JaccardVideoRecommender:
 
     def _get_youtube_features(self, youtube_id: int) -> Dict[str, Set[str]]:
         """Get features for a youtube video from youtube_features table."""
+        self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
             SELECT category, feature
@@ -389,6 +385,7 @@ class JaccardVideoRecommender:
         """
         # Fetch features from youtube_current_recs_features table
         rec_id = row[0]
+        self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
             SELECT category, feature
@@ -407,17 +404,18 @@ class JaccardVideoRecommender:
         Update features for YouTube videos in the youtube_features table.
         Uses db_crud functions instead of direct cursor operations.
         """
+        self._ensure_connection()
         cur = self.cx.cursor
         if project_id is None:
             cur.execute("""
                 SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
-                       video_views, video_likes, video_embedding
+                       video_views, video_likes
                 FROM youtube
             """)
         else:
             cur.execute("""
                 SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
-                       video_views, video_likes, video_embedding
+                       video_views, video_likes
                 FROM youtube
                 WHERE project_id = %s
             """, (project_id,))
@@ -428,7 +426,6 @@ class JaccardVideoRecommender:
             duration_sec = row[1]
             views = row[2]
             likes = row[3]
-            embedding = row[4]
             
             # Generate features
             # sem_score=None will default to "sem:mid" in the features function
@@ -444,6 +441,7 @@ class JaccardVideoRecommender:
 
     def _fetch_current_recs(self, project_id: int) -> List[Tuple]:
         """Fetch staged candidates."""
+        self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
             SELECT
@@ -453,8 +451,7 @@ class JaccardVideoRecommender:
                 TIME_TO_SEC(video_duration) AS video_duration_sec,
                 video_url,
                 video_views,
-                video_likes,
-                video_embedding
+                video_likes
             FROM youtube_current_recs
             WHERE project_id=%s
         """, (project_id,))
