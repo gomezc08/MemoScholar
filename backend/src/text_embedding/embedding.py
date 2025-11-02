@@ -2,17 +2,19 @@ import os
 from typing import Dict, Any, Optional, List
 import openai
 from openai import OpenAI
-from dotenv import load_dotenv
 import json
 from langchain_openai import OpenAIEmbeddings
 import numpy as np
 
-load_dotenv()
-os.environ["OPENAI_API_KEY"]=os.getenv("OPENAI_API_KEY")
-
 class Embedding:
     def __init__(self):
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        self._embeddings = None  # Lazy initialization
+    
+    @property
+    def embeddings(self):
+        if self._embeddings is None:
+            self._embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        return self._embeddings
 
     def embed_text(self, text: str) -> List[float]:
         try:

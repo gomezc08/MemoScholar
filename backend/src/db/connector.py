@@ -1,5 +1,4 @@
 import mysql.connector
-from dotenv import load_dotenv
 import os
 
 class Connector:
@@ -12,7 +11,6 @@ class Connector:
         if self.cnx is not None and self.cnx.is_connected():
             return None
             
-        load_dotenv()
         try:
             config = {
                 "user": os.getenv('USER'),
@@ -30,6 +28,7 @@ class Connector:
         except mysql.connector.Error as err:
             print(f"Error connecting to MySQL: {err}")
             self.cnx = None
+            self.cursor = None
     
     def close_connection(self):
         if self.cursor:

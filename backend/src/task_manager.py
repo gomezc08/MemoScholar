@@ -19,10 +19,28 @@ class TaskManager:
         self.db_select.connector = self.cx
         self.db_insert.manage_connection = False
         self.db_select.manage_connection = False
-        self.youtube_generator = YoutubeGenerator()
-        self.paper_generator = PaperGenerator()
-        self.create_query = CreateQuery()
+        self._youtube_generator = None  # Lazy initialization
+        self._paper_generator = None
+        self._create_query = None
         self.logger = get_logger(__name__)
+    
+    @property
+    def youtube_generator(self):
+        if self._youtube_generator is None:
+            self._youtube_generator = YoutubeGenerator()
+        return self._youtube_generator
+    
+    @property
+    def paper_generator(self):
+        if self._paper_generator is None:
+            self._paper_generator = PaperGenerator()
+        return self._paper_generator
+    
+    @property
+    def create_query(self):
+        if self._create_query is None:
+            self._create_query = CreateQuery()
+        return self._create_query
 
     def handle_submission(self, data):
         """
@@ -384,36 +402,6 @@ class TaskManager:
         finally:
             self.cx.close_connection()
 
-    def handle_get_youtube_video_from_recs(self, rec_id):
-        """
-        Get a single YouTube video from youtube_current_recs by rec_id.
-        Returns video data or None if not found.
-        """
-        try:
-            self.cx.open_connection()
-            # Validate rec_id
-            if not rec_id or rec_id <= 0:
-                raise ValueError("Invalid rec_id provided")
-            
-            # Get YouTube video from recs by rec_id
-            video = self.db_select.get_youtube_video_from_youtube_current_recs(rec_id)
-            
-            if not video:
-                self.logger.info(f"YouTube video not found in current recs with rec_id: {rec_id}")
-                return None
-            
-            self.logger.info(f"Retrieved YouTube video from recs with rec_id: {rec_id}")
-            return video
-            
-        except ValueError as e:
-            self.logger.error(f"Validation error in handle_get_youtube_video_from_recs: {str(e)}")
-            raise
-        except Exception as e:
-            self.logger.error(f"Unexpected error in handle_get_youtube_video_from_recs: {str(e)}")
-            raise RuntimeError(f"Failed to get YouTube video from recs: {str(e)}")
-        finally:
-            self.cx.close_connection()
-
     def handle_get_paper(self, paper_id):
         """
         Get a single paper by ID.
@@ -570,28 +558,16 @@ class TaskManager:
         self.logger.info(f"Extracted query text: {query_text}")
         youtube_data = self.youtube_generator.generate_youtube_videos(data, query_result)
         youtube_videos = youtube_data.get('youtube', [])
-        youtube_with_ids = []
         
+        # youtube_videos already has full details including youtube_id
+        # Just format them for return
+        youtube_with_ids = []
         for video in youtube_videos:
-            youtube_id = self.db_insert.create_youtube(
-                project_id, 
-                query_id, 
-                video.get('video_title', ''), 
-                video.get('video_description', ''),
-                video.get('video_duration', ''), 
-                video.get('video_url', ''),
-                video.get('video_views', 0), 
-                video.get('video_likes', 0)
-            )
-            
-            if youtube_id:
-                # Add database ID to the video data
+            if video.get('youtube_id'):
+                # Already has database ID from add_candidates
                 video_with_id = video.copy()
-                video_with_id['youtube_id'] = youtube_id
                 youtube_with_ids.append(video_with_id)
-                self.logger.info(f"Created YouTube video with ID {youtube_id}: {video.get('video_title', 'Unknown')}")
-            else:
-                self.logger.warning(f"Failed to create YouTube video: {video.get('video_title', 'Unknown')}")
+                self.logger.info(f"Retrieved YouTube video with ID {video.get('youtube_id')}: {video.get('video_title', 'Unknown')}")
         
         self.logger.info(f"Successfully processed {len(youtube_with_ids)} YouTube videos")
         return youtube_with_ids

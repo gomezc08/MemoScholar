@@ -249,45 +249,16 @@ class DBInsert:
     def create_like(self, project_id, target_type, target_id, isLiked):
         """
         target_type must be 'youtube' or 'paper' (per CHECK).
-        For YouTube videos, if the target_id is a rec_id from youtube_current_recs,
-        we'll create a record in the main youtube table first.
         """
         self.connector.open_connection()
         try:
-            actual_target_id = target_id
-            
             if target_type == "youtube":
-                # First check if it exists in the main youtube table
+                # Check if it exists in the youtube table
                 chk = "SELECT 1 FROM youtube WHERE youtube_id = %s AND project_id = %s"
                 self.connector.cursor.execute(chk, (target_id, project_id))
                 
                 if self.connector.cursor.fetchone() is None:
-                    # Not found in main table, check if it's in youtube_current_recs
-                    rec_check = """
-                        SELECT rec_id, project_id, video_title, video_description, 
-                               video_duration, video_url, video_views, video_likes
-                        FROM youtube_current_recs 
-                        WHERE rec_id = %s AND project_id = %s
-                    """
-                    self.connector.cursor.execute(rec_check, (target_id, project_id))
-                    rec_result = self.connector.cursor.fetchone()
-                    
-                    if rec_result:
-                        # Found in youtube_current_recs, create record in main youtube table
-                        insert_youtube = """
-                            INSERT INTO youtube (
-                                project_id, video_title, video_description,
-                                video_duration, video_url, video_views, video_likes
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """
-                        youtube_values = (
-                            project_id, rec_result[2], rec_result[3],  # video_title, video_description
-                            rec_result[4], rec_result[5], rec_result[6], rec_result[7]  # duration, url, views, likes
-                        )
-                        self.connector.cursor.execute(insert_youtube, youtube_values)
-                        actual_target_id = self.connector.cursor.lastrowid
-                    else:
-                        raise ValueError(f"youtube id {target_id} not found for project {project_id}")
+                    raise ValueError(f"youtube id {target_id} not found for project {project_id}")
                         
             elif target_type == "paper":
                 chk = "SELECT 1 FROM papers WHERE paper_id = %s AND project_id = %s"
@@ -299,7 +270,7 @@ class DBInsert:
 
             # Create the like/dislike record
             query = "INSERT INTO likes (project_id, target_type, target_id, isLiked) VALUES (%s, %s, %s, %s)"
-            values = (project_id, target_type, actual_target_id, isLiked)
+            values = (project_id, target_type, target_id, isLiked)
             self.connector.cursor.execute(query, values)
             self.connector.cnx.commit()
             # Return the like_id of the created like
@@ -312,106 +283,13 @@ class DBInsert:
             if self.manage_connection:
                 self.connector.close_connection()
 
-    def insert_youtube_current_recs(self, project_id, videos_list):
-        """
-        Insert a list of videos into youtube_current_recs table.
-        Each video should be a dict with keys: video_title, video_description, video_duration, video_url, video_views, video_likes
-        """
-        if not videos_list:
-            return []
-        
-        self.connector.open_connection()
-        try:
-            # Clear existing recommendations for this project first
-            delete_query = "DELETE FROM youtube_current_recs WHERE project_id = %s"
-            self.connector.cursor.execute(delete_query, (project_id,))
-            
-            # Clean up orphaned likes that reference deleted rec_ids
-            # This prevents orphaned likes from showing up in the management panel
-            cleanup_query = """
-                DELETE FROM likes 
-                WHERE project_id = %s 
-                AND target_type = 'youtube' 
-                AND target_id NOT IN (
-                    SELECT youtube_id FROM youtube 
-                    WHERE project_id = %s
-                )
-            """
-            self.connector.cursor.execute(cleanup_query, (project_id, project_id))
-            
-            inserted_ids = []
-            for rank, video in enumerate(videos_list, 1):
-                query = """
-                    INSERT INTO youtube_current_recs (
-                        project_id, video_title, video_description, video_duration, 
-                        video_url, video_views, video_likes, rank_position
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                values = (
-                    project_id,
-                    video.get('video_title', ''),
-                    video.get('video_description', ''),
-                    video.get('video_duration', '00:00:00'),
-                    video.get('video_url', ''),
-                    video.get('video_views', 0),
-                    video.get('video_likes', 0),
-                    rank
-                )
-                self.connector.cursor.execute(query, values)
-                inserted_ids.append(self.connector.cursor.lastrowid)
-            
-            self.connector.cnx.commit()
-            
-            # Now generate features for each inserted rec
-            from src.jaccard_coefficient.features import Features
-            features_gen = Features()
-            
-            # Fetch the recs we just inserted
-            self.connector.cursor.execute("""
-                SELECT rec_id, TIME_TO_SEC(video_duration) AS video_duration_sec, 
-                       video_views, video_likes
-                FROM youtube_current_recs 
-                WHERE project_id = %s
-            """, (project_id,))
-            
-            recs = self.connector.cursor.fetchall()
-            for rec in recs:
-                rec_id = rec[0]
-                duration_sec = rec[1]
-                views = rec[2]
-                likes = rec[3]
-                
-                # Generate features
-                features_list = features_gen.video_features(
-                    seconds=duration_sec,
-                    published_at=None,
-                    views=views,
-                    sem_score=None
-                )
-                
-                # Insert features
-                if features_list:
-                    self.connector.cursor.executemany(
-                        "INSERT INTO youtube_current_recs_features(rec_id, category, feature) VALUES (%s, %s, %s)",
-                        [(rec_id, cat, feat) for cat, feat in features_list]
-                    )
-            
-            self.connector.cnx.commit()
-            return inserted_ids
-        except Exception as e:
-            print("insert_youtube_current_recs error:", e)
-            self.connector.cnx.rollback()
-            return []
-        finally:
-            if self.manage_connection:
-                self.connector.close_connection()
-    
     def insert_youtube_features(self, youtube_id, features_list):
         """
         Insert features into youtube_features table.
         features_list should be a list of tuples (category, feature_value).
         """
-        self.connector.open_connection()
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             # Delete existing features first
             self.connector.cursor.execute("DELETE FROM youtube_features WHERE youtube_id = %s", (youtube_id,))
@@ -422,59 +300,15 @@ class DBInsert:
                     "INSERT INTO youtube_features(youtube_id, category, feature) VALUES (%s, %s, %s)",
                     [(youtube_id, cat, feat) for cat, feat in features_list]
                 )
-            self.connector.cnx.commit()
+            if self.manage_connection:
+                self.connector.cnx.commit()
             return True
         except Exception as e:
             print("insert_youtube_features error:", e)
-            self.connector.cnx.rollback()
+            if self.manage_connection:
+                self.connector.cnx.rollback()
             return False
         finally:
             if self.manage_connection:
                 self.connector.close_connection()
     
-    def insert_rec_features(self, rec_id, features_list):
-        """
-        Insert features into youtube_current_recs_features table.
-        features_list should be a list of tuples (category, feature_value).
-        """
-        if self.manage_connection:
-            self.connector.open_connection()
-        try:
-            # Delete existing features first
-            self.connector.cursor.execute("DELETE FROM youtube_current_recs_features WHERE rec_id = %s", (rec_id,))
-            
-            # Insert new features
-            if features_list:
-                self.connector.cursor.executemany(
-                    "INSERT INTO youtube_current_recs_features(rec_id, category, feature) VALUES (%s, %s, %s)",
-                    [(rec_id, cat, feat) for cat, feat in features_list]
-                )
-            self.connector.cnx.commit()
-            return True
-        except Exception as e:
-            print("insert_rec_features error:", e)
-            self.connector.cnx.rollback()
-            return False
-        finally:
-            if self.manage_connection:
-                self.connector.close_connection()
-    
-    def delete_rec_features_for_project(self, project_id):
-        """
-        Delete features for all recommendations in youtube_current_recs_features for a project.
-        """
-        self.connector.open_connection()
-        try:
-            self.connector.cursor.execute("""
-                DELETE FROM youtube_current_recs_features 
-                WHERE rec_id IN (SELECT rec_id FROM youtube_current_recs WHERE project_id = %s)
-            """, (project_id,))
-            self.connector.cnx.commit()
-            return True
-        except Exception as e:
-            print("delete_rec_features_for_project error:", e)
-            self.connector.cnx.rollback()
-            return False
-        finally:
-            if self.manage_connection:
-                self.connector.close_connection()

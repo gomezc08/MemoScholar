@@ -39,11 +39,13 @@ class DBSelect:
             print(f"get_user error: {e}")
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def get_user_by_email(self, email):
         """Get a user by email"""
-        self.connector.open_connection()
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             query = "SELECT user_id, name, email FROM users WHERE email = %s"
             self.connector.cursor.execute(query, (email,))
@@ -59,7 +61,8 @@ class DBSelect:
             print(f"get_user_by_email error: {e}")
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def get_all_users(self):
         """Get all users"""
@@ -328,8 +331,49 @@ class DBSelect:
             self.connector.close_connection()
     
     def get_project_youtube_videos(self, project_id):
-        """Get all YouTube videos for a project"""
-        self.connector.open_connection()
+        """Get all unrecommended YouTube videos for a project"""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT youtube_id, project_id, query_id, video_title, video_description, 
+                       video_duration, video_url, video_views, video_likes
+                FROM youtube
+                WHERE project_id = %s
+                AND NOT EXISTS (
+                    SELECT 1 FROM youtube_has_rec
+                    WHERE youtube_has_rec.youtube_id = youtube.youtube_id
+                    AND youtube_has_rec.hasBeenRecommended = TRUE
+                )
+                ORDER BY youtube_id
+            """
+            self.connector.cursor.execute(query, (project_id,))
+            results = self.connector.cursor.fetchall()
+            return [
+                {
+                    'youtube_id': row[0],
+                    'project_id': row[1],
+                    'query_id': row[2],
+                    'video_title': row[3],
+                    'video_description': row[4],
+                    'video_duration': str(row[5]) if row[5] else None,  # Convert TIME to string
+                    'video_url': row[6],
+                    'video_views': row[7],
+                    'video_likes': row[8]
+                }
+                for row in results
+            ]
+        except Exception as e:
+            print(f"get_project_youtube_videos error: {e}")
+            return []
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+    
+    def get_all_project_youtube_videos(self, project_id):
+        """Get ALL YouTube videos for a project (both recommended and unrecommended)"""
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             query = """
                 SELECT youtube_id, project_id, query_id, video_title, video_description, 
@@ -355,10 +399,11 @@ class DBSelect:
                 for row in results
             ]
         except Exception as e:
-            print(f"get_project_youtube_videos error: {e}")
+            print(f"get_all_project_youtube_videos error: {e}")
             return []
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def get_youtube_video(self, youtube_id):
         """Get a single YouTube video by ID"""
@@ -607,74 +652,6 @@ class DBSelect:
             if self.manage_connection:
                 self.connector.close_connection()
     
-    def get_youtube_video_from_youtube_current_recs(self, rec_id):
-        """Get a single YouTube video from youtube_current_recs by rec_id"""
-        if self.manage_connection:
-            self.connector.open_connection()
-        try:
-            query = """
-                SELECT rec_id, project_id, video_title, video_description, 
-                       video_duration, video_url, video_views, video_likes, score, rank_position
-                FROM youtube_current_recs 
-                WHERE rec_id = %s
-            """
-            self.connector.cursor.execute(query, (rec_id,))
-            result = self.connector.cursor.fetchone()
-            if result:
-                return {
-                    'rec_id': result[0],
-                    'project_id': result[1],
-                    'video_title': result[2],
-                    'video_description': result[3],
-                    'video_duration': str(result[4]) if result[4] else None,
-                    'video_url': result[5],
-                    'video_views': result[6],
-                    'video_likes': result[7],
-                    'score': result[8],
-                    'rank_position': result[9]
-                }
-            return None
-        except Exception as e:
-            print(f"get_youtube_video_from_youtube_current_recs error: {e}")
-            return None
-        finally:
-            if self.manage_connection:
-                self.connector.close_connection()
-    
-    def get_project_youtube_current_recs(self, project_id):
-        """Get all YouTube videos from youtube_current_recs for a project"""
-        self.connector.open_connection()
-        try:
-            query = """
-                SELECT rec_id, project_id, video_title, video_description, 
-                       video_duration, video_url, video_views, video_likes, score, rank_position
-                FROM youtube_current_recs 
-                WHERE project_id = %s 
-                ORDER BY rec_id
-            """
-            self.connector.cursor.execute(query, (project_id,))
-            results = self.connector.cursor.fetchall()
-            return [
-                {
-                    'rec_id': row[0],
-                    'project_id': row[1],
-                    'video_title': row[2],
-                    'video_description': row[3],
-                    'video_duration': str(row[4]) if row[4] else None,
-                    'video_url': row[5],
-                    'video_views': row[6],
-                    'video_likes': row[7],
-                    'score': row[8],
-                    'rank_position': row[9]
-                }
-                for row in results
-            ]
-        except Exception as e:
-            print(f"get_project_youtube_current_recs error: {e}")
-            return []
-        finally:
-            self.connector.close_connection()
-    
     def get_youtube_features(self, youtube_id):
         """Get all features for a YouTube video"""
         self.connector.open_connection()
@@ -702,29 +679,3 @@ class DBSelect:
         finally:
             self.connector.close_connection()
     
-    def get_rec_features(self, rec_id):
-        """Get all features for a YouTube current recommendation"""
-        self.connector.open_connection()
-        try:
-            query = """
-                SELECT rec_feature_id, rec_id, category, feature
-                FROM youtube_current_recs_features
-                WHERE rec_id = %s
-                ORDER BY category, feature
-            """
-            self.connector.cursor.execute(query, (rec_id,))
-            results = self.connector.cursor.fetchall()
-            return [
-                {
-                    'rec_feature_id': row[0],
-                    'rec_id': row[1],
-                    'category': row[2],
-                    'feature': row[3]
-                }
-                for row in results
-            ]
-        except Exception as e:
-            print(f"get_rec_features error: {e}")
-            return []
-        finally:
-            self.connector.close_connection()

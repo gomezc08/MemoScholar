@@ -34,8 +34,7 @@ class JaccardVideoRecommender:
     Public API:
       - update_features(project_id: Optional[int] = None) -> None
       - recommend(project_id: int, topk: int = 5, include_likes: bool = True) -> List[Dict]
-      - restage_candidates(project_id: int, candidates: List[Dict]) -> None
-      - promote_topk_and_clear(project_id: int, topk: int = 5) -> None
+      - add_candidates(project_id: int, candidates: List[Dict]) -> List[int]
     """
     
     # Feature category weights (alpha values)
@@ -56,12 +55,11 @@ class JaccardVideoRecommender:
         self.embedding = Embedding()
         
         # Share the open connection with DBSelect and DBInsert
-        if self.cx.cursor:
-            self.db_select.connector = self.cx
-            self.db_insert.connector = self.cx
-            # Disable connection management for shared connection
-            self.db_select.manage_connection = False
-            self.db_insert.manage_connection = False
+        self.db_select.connector = self.cx
+        self.db_insert.connector = self.cx
+        # Disable connection management for shared connection
+        self.db_select.manage_connection = False
+        self.db_insert.manage_connection = False
 
     def _ensure_connection(self) -> None:
         if self.cx.cursor is None or self.cx.cnx is None or not self.cx.cnx.is_connected():
@@ -97,7 +95,6 @@ class JaccardVideoRecommender:
     def update_features(self, project_id: Optional[int] = None) -> None:
         """
         Refresh derived features for persisted YouTube videos.
-        Does not compute features for `youtube_current_recs` (computed when restaging).
         Note: Project features are computed on-the-fly and don't need updating.
         """
         self._ensure_connection()
@@ -105,7 +102,7 @@ class JaccardVideoRecommender:
 
     def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, lambda_dislike: float = 0.5) -> List[Dict]:
         """
-        Score current staged candidates in `youtube_current_recs`, update their score/rank,
+        Score all videos that haven't been recommended yet, update their recommendation status,
         and return the top-k.
         """
         self._ensure_connection()
@@ -115,13 +112,13 @@ class JaccardVideoRecommender:
         # Load disliked features
         disliked_features = self._load_disliked_features(project_id)
         
-        # Fetch candidate videos
-        cand_rows = self._fetch_current_recs(project_id)
+        # Fetch candidate videos (videos that haven't been recommended)
+        cand_rows = self._fetch_unrecommended_videos(project_id)
         
         scored: List[Tuple[int, str, Optional[str], float]] = []
         for r in cand_rows:
             # Extract features from candidate row
-            cand_features = self._extract_features_from_rec_row(r)
+            cand_features = self._extract_features_from_youtube_row(r)
             
             # Debug: log features for first video only
             if len(scored) == 0:
@@ -137,100 +134,33 @@ class JaccardVideoRecommender:
             # Calculate final score: S(P, i) = J^+(P, i) - λ * J^-(P, i)
             final_score = max(0.0, pos_score - lambda_dislike * neg_score)
             
-            # r[0] = rec_id, r[1] = video_title, r[4] = video_url
+            # r[0] = youtube_id, r[1] = video_title, r[4] = video_url
             scored.append((r[0], r[1], r[4], final_score))
         
-        # Persist scores and ranks
+        # Sort by score
         scored_sorted = sorted(scored, key=lambda x: x[3], reverse=True)
-        self._update_rec_scores_and_ranks(project_id, scored_sorted)
+        
+        # Mark top-k as recommended
+        self._mark_topk_as_recommended(project_id, scored_sorted[:topk])
         
         # Return full YouTube video details with score
         result: List[Dict] = []
-        for rec_id, title, url, s in scored_sorted[:topk]:
-            video_details = self.db_select.get_youtube_video_from_youtube_current_recs(rec_id)
+        for youtube_id, title, url, s in scored_sorted[:topk]:
+            video_details = self.db_select.get_youtube_video(youtube_id)
             if video_details:
                 video_details['calculated_score'] = s
                 result.append(video_details)
         return result
 
-    def promote_topk_and_clear(self, project_id: int, topk: int = 5) -> None:
+    def add_candidates(self, project_id: int, candidates: List[Dict]) -> List[int]:
         """
-        Insert the top-k ranked current recommendations into `youtube` as the shown items,
-        then clear all `youtube_current_recs` for the project.
+        Add new candidate videos to the youtube table (if they don't exist).
+        Returns list of youtube_ids that were added.
         """
+        logger.info(f"add_candidates called with {len(candidates)} candidates for project {project_id}")
         self._ensure_connection()
         cur = self.cx.cursor
-        # Select top-k by rank
-        cur.execute(
-            """
-            SELECT rec_id, video_title, video_description, video_duration, video_url, video_views, video_likes
-            FROM youtube_current_recs
-            WHERE project_id=%s
-            ORDER BY rank_position ASC NULLS LAST, score DESC
-            LIMIT %s
-            """,
-            (project_id, topk),
-        )
-        top_rows = cur.fetchall()
-        if top_rows:
-            cur.executemany(
-                """
-                INSERT INTO youtube(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """,
-                [
-                    (
-                        project_id,
-                        r[1],  # video_title
-                        r[2],  # video_description
-                        r[3],  # video_duration
-                        r[4],  # video_url
-                        r[5],  # video_views
-                        r[6]   # video_likes
-                    )
-                    for r in top_rows
-                ],
-            )
         
-        # Clear staging
-        cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
-        
-        # Clean up orphaned likes
-        cleanup_query = """
-            DELETE FROM likes 
-            WHERE project_id = %s 
-            AND target_type = 'youtube' 
-            AND target_id NOT IN (
-                SELECT youtube_id FROM youtube 
-                WHERE project_id = %s
-            )
-        """
-        cur.execute(cleanup_query, (project_id, project_id))
-        
-        self.cx.cnx.commit()
-
-    def restage_candidates(self, project_id: int, candidates: List[Dict]) -> None:
-        """
-        Replace current staged candidates for the project with the provided candidates.
-        Also computes and stores features in youtube_current_recs_features.
-        """
-        self._ensure_connection()
-        cur = self.cx.cursor
-        cur.execute("DELETE FROM youtube_current_recs WHERE project_id=%s", (project_id,))
-        cur.execute("DELETE FROM youtube_current_recs_features WHERE rec_id IN (SELECT rec_id FROM youtube_current_recs WHERE project_id=%s)", (project_id,))
-        
-        # Clean up orphaned likes
-        cleanup_query = """
-            DELETE FROM likes 
-            WHERE project_id = %s 
-            AND target_type = 'youtube' 
-            AND target_id NOT IN (
-                SELECT youtube_id FROM youtube 
-                WHERE project_id = %s
-            )
-        """
-        cur.execute(cleanup_query, (project_id, project_id))
-
         def _secs_to_time(secs: Optional[int]) -> Optional[str]:
             if secs is None:
                 return None
@@ -239,60 +169,64 @@ class JaccardVideoRecommender:
             s = secs % 60
             return f"{h:02d}:{m:02d}:{s:02d}"
 
-        rows = []
-        for c in candidates:
+        added_ids = []
+        for idx, c in enumerate(candidates):
+            logger.info(f"Processing candidate {idx+1}/{len(candidates)}: {c.get('title', 'Unknown')[:50]}")
             title = c.get("title")
             if not title:
                 continue
             desc = c.get("description", "")
             url = c.get("url")
-            views = c.get("views", 0)
-            likes = c.get("likes", 0)
-            # embedding removed from staging table
+            views = int(c.get("views", 0) or 0)
+            likes = int(c.get("likes", 0) or 0)
             
             if "duration_time" in c and c.get("duration_time") is not None:
                 dur_time = c.get("duration_time")
             else:
                 dur_time = _secs_to_time(c.get("duration_seconds"))
             
-            rows.append((project_id, title, desc, dur_time, url, views, likes))
-
-        if rows:
-            cur.executemany(
+            # Check if video already exists
+            cur.execute("""
+                SELECT youtube_id FROM youtube 
+                WHERE project_id=%s AND video_title=%s
+            """, (project_id, title))
+            
+            if cur.fetchone():
+                continue  # Skip if already exists
+            
+            # Insert video
+            cur.execute(
                 """
-                INSERT INTO youtube_current_recs(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO youtube(project_id, video_title, video_description, video_duration, video_url, video_views, video_likes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                rows,
+                (project_id, title, desc, dur_time, url, views, likes)
             )
-            self.cx.cnx.commit()
+            youtube_id = cur.lastrowid
+            added_ids.append(youtube_id)
             
-            # Now compute features for each inserted candidate
-            cur.execute("SELECT rec_id, TIME_TO_SEC(video_duration) AS video_duration_sec, video_views, video_likes, video_title, video_description FROM youtube_current_recs WHERE project_id=%s", (project_id,))
-            recs = cur.fetchall()
+            # Generate and insert features
+            duration_sec = None
+            if dur_time:
+                parts = dur_time.split(':')
+                duration_sec = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
             
-            for rec_row in recs:
-                rec_id = rec_row[0]
-                duration_sec = rec_row[1]
-                views = rec_row[2]
-                likes = rec_row[3]
-                title = rec_row[4]
-                description = rec_row[5]
-                
-                # Generate features 
-                # Using placeholder sem_score since we don't compute actual similarity yet
-                # The video_features function will default to "sem:mid" if None
-                features_list = self.features.video_features(
-                    seconds=duration_sec,
-                    published_at=None,
-                    views=views,
-                    sem_score=None
-                )
-                
-                # Insert features using db_crud
-                self.db_insert.insert_rec_features(rec_id, features_list)
+            features_list = self.features.video_features(
+                seconds=duration_sec,
+                published_at=None,
+                views=views,
+                sem_score=None
+            )
             
-            self.cx.cnx.commit()
+            # Insert features using db_crud
+            logger.info(f"Inserting features for youtube_id {youtube_id}")
+            self.db_insert.insert_youtube_features(youtube_id, features_list)
+            logger.info(f"Successfully inserted features for youtube_id {youtube_id}")
+        
+        logger.info(f"Committing {len(added_ids)} added videos")
+        self.cx.cnx.commit()
+        logger.info(f"add_candidates complete, returning {len(added_ids)} added IDs")
+        return added_ids
 
     # ---------------- Private helpers ---------------- 
     
@@ -378,20 +312,20 @@ class JaccardVideoRecommender:
         
         return features_by_category
 
-    def _extract_features_from_rec_row(self, row: Tuple) -> Dict[str, Set[str]]:
+    def _extract_features_from_youtube_row(self, row: Tuple) -> Dict[str, Set[str]]:
         """
-        Extract features from a youtube_current_recs row.
-        row format: (rec_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes, embedding)
+        Extract features from a youtube table row.
+        row format: (youtube_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
         """
-        # Fetch features from youtube_current_recs_features table
-        rec_id = row[0]
+        # Fetch features from youtube_features table
+        youtube_id = row[0]
         self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
             SELECT category, feature
-            FROM youtube_current_recs_features
-            WHERE rec_id = %s
-        """, (rec_id,))
+            FROM youtube_features
+            WHERE youtube_id = %s
+        """, (youtube_id,))
         
         features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
         for category, feature_value in cur.fetchall():
@@ -439,38 +373,46 @@ class JaccardVideoRecommender:
             # Insert features using db_crud
             self.db_insert.insert_youtube_features(youtube_id, features_list)
 
-    def _fetch_current_recs(self, project_id: int) -> List[Tuple]:
-        """Fetch staged candidates."""
+    def _fetch_unrecommended_videos(self, project_id: int) -> List[Tuple]:
+        """Fetch videos that haven't been recommended yet."""
         self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
             SELECT
-                rec_id,
-                video_title,
-                video_description,
-                TIME_TO_SEC(video_duration) AS video_duration_sec,
-                video_url,
-                video_views,
-                video_likes
-            FROM youtube_current_recs
-            WHERE project_id=%s
+                y.youtube_id,
+                y.video_title,
+                y.video_description,
+                TIME_TO_SEC(y.video_duration) AS video_duration_sec,
+                y.video_url,
+                y.video_views,
+                y.video_likes
+            FROM youtube y
+            WHERE y.project_id=%s
+            AND NOT EXISTS (
+                SELECT 1 FROM youtube_has_rec yhr
+                WHERE yhr.youtube_id = y.youtube_id 
+                AND yhr.hasBeenRecommended = TRUE
+            )
         """, (project_id,))
         results = cur.fetchall()
         return results
 
-    def _update_rec_scores_and_ranks(self, project_id: int, scored_sorted: List[Tuple[int, str, Optional[str], float]]) -> None:
-        """Persist scores and ranks for current staged candidates."""
+    def _mark_topk_as_recommended(self, project_id: int, top_videos: List[Tuple[int, str, Optional[str], float]]) -> None:
+        """Mark top-k videos as recommended in youtube_has_rec."""
         cur = self.cx.cursor
-        # Update score
-        for rec_id, _title, _url, score in scored_sorted:
-            cur.execute(
-                "UPDATE youtube_current_recs SET score=%s WHERE rec_id=%s",
-                (score, rec_id),
-            )
-        # Update rank
-        for rank, (rec_id, _title, _url, _score) in enumerate(scored_sorted, start=1):
-            cur.execute(
-                "UPDATE youtube_current_recs SET rank_position=%s WHERE rec_id=%s",
-                (rank, rec_id),
-            )
+        for youtube_id, _title, _url, _score in top_videos:
+            # Check if entry already exists
+            cur.execute("SELECT youtube_has_rec_id FROM youtube_has_rec WHERE youtube_id=%s", (youtube_id,))
+            if cur.fetchone():
+                # Update existing entry
+                cur.execute(
+                    "UPDATE youtube_has_rec SET hasBeenRecommended=TRUE WHERE youtube_id=%s",
+                    (youtube_id,)
+                )
+            else:
+                # Insert new entry
+                cur.execute(
+                    "INSERT INTO youtube_has_rec(youtube_id, hasBeenRecommended) VALUES (%s, TRUE)",
+                    (youtube_id,)
+                )
         self.cx.cnx.commit()
