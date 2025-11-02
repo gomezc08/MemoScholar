@@ -19,10 +19,28 @@ class TaskManager:
         self.db_select.connector = self.cx
         self.db_insert.manage_connection = False
         self.db_select.manage_connection = False
-        self.youtube_generator = YoutubeGenerator()
-        self.paper_generator = PaperGenerator()
-        self.create_query = CreateQuery()
+        self._youtube_generator = None  # Lazy initialization
+        self._paper_generator = None
+        self._create_query = None
         self.logger = get_logger(__name__)
+    
+    @property
+    def youtube_generator(self):
+        if self._youtube_generator is None:
+            self._youtube_generator = YoutubeGenerator()
+        return self._youtube_generator
+    
+    @property
+    def paper_generator(self):
+        if self._paper_generator is None:
+            self._paper_generator = PaperGenerator()
+        return self._paper_generator
+    
+    @property
+    def create_query(self):
+        if self._create_query is None:
+            self._create_query = CreateQuery()
+        return self._create_query
 
     def handle_submission(self, data):
         """

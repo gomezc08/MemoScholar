@@ -2,7 +2,6 @@ import os
 from typing import Dict, Any, Optional, List
 import openai
 from openai import OpenAI
-from dotenv import load_dotenv
 import json
 from ..utils.logging_config import get_logger
 
@@ -35,7 +34,6 @@ def run_request(
     """
     
     # Get API key from environment
-    load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable is not set")
