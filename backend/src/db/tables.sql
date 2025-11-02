@@ -1,7 +1,6 @@
 -- Drop in FK-safe order
 DROP TABLE IF EXISTS likes;
-DROP TABLE IF EXISTS youtube_current_recs_features;
-DROP TABLE IF EXISTS youtube_current_recs;
+DROP TABLE IF EXISTS youtube_has_rec;
 DROP TABLE IF EXISTS youtube_features;
 DROP TABLE IF EXISTS youtube_embeddings;
 DROP TABLE IF EXISTS youtube;
@@ -33,9 +32,9 @@ CREATE TABLE project (
 -- Project Embeddings
 CREATE TABLE project_embeddings (
 	project_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  project_id BIGINT UNSIGNED NOT NULL,
-  embedding  VECTOR(1536),
-  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
+    project_id BIGINT UNSIGNED NOT NULL,
+    embedding  VECTOR(1536),
+    FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
 -- Queries
@@ -90,29 +89,19 @@ CREATE TABLE youtube (
   FOREIGN KEY (query_id)   REFERENCES queries(query_id)  ON DELETE SET NULL
 );
 
+CREATE TABLE youtube_has_rec (
+	youtube_has_rec_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    youtube_id BIGINT UNSIGNED NOT NULL,
+    hasBeenRecommended BOOLEAN NOT NULL,
+    FOREIGN KEY (youtube_id) REFERENCES youtube(youtube_id) ON DELETE CASCADE
+);
+
 -- Project Embeddings
 CREATE TABLE youtube_embeddings (
 	youtube_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  project_id BIGINT UNSIGNED NOT NULL,
-  embedding  VECTOR(1536),
-  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
-);
-
--- Staging area for per-project recommendation candidates (20 at a time)
-CREATE TABLE youtube_current_recs (
-  rec_id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  project_id      BIGINT UNSIGNED NOT NULL,
-  video_title     VARCHAR(255) NOT NULL,
-  video_description TEXT,
-  video_duration  TIME,
-  video_url       VARCHAR(500),
-  video_views     BIGINT DEFAULT 0,
-  video_likes     BIGINT DEFAULT 0,
-  score           DOUBLE PRECISION DEFAULT 0,
-  rank_position   INT,
-  video_embedding VECTOR(1536),
-  created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
+    project_id BIGINT UNSIGNED NOT NULL,
+    embedding  VECTOR(1536),
+    FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
 -- YouTube Feautures
@@ -122,15 +111,6 @@ CREATE TABLE youtube_features (
     category           ENUM('dur','fresh','pop','type','tok','kp','emb') NOT NULL,
     feature            VARCHAR(64) NOT NULL,
     FOREIGN KEY (youtube_id) REFERENCES youtube(youtube_id) ON DELETE CASCADE
-);
-
--- Staging area for per-project recommendation candidates features (20 at a time)
-CREATE TABLE youtube_current_recs_features (
-	rec_feature_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    rec_id         BIGINT UNSIGNED NOT NULL,
-    category           ENUM('dur','fresh','pop','type','tok','kp','emb') NOT NULL,
-    feature            VARCHAR(64) NOT NULL,
-    FOREIGN KEY (rec_id) REFERENCES youtube_current_recs(rec_id) ON DELETE CASCADE
 );
 
 -- Likes

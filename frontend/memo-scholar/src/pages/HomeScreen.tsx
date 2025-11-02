@@ -74,7 +74,6 @@ export default function HomeScreen({
             console.log(`🔍 Trying to fetch YouTube video with target_id: ${like.target_id}`);
             
             // First, check if the video exists in the current youtubeItems prop
-            // This handles the case where the video is from youtube_current_recs (regenerated videos)
             const existingItem = youtubeItems.find(item => item.database_id === like.target_id);
             if (existingItem) {
               console.log(`📺 Found video in current youtubeItems prop`);
@@ -88,9 +87,9 @@ export default function HomeScreen({
                 video_url: existingItem.meta.video_url
               };
             } else {
-              // Try to get from youtube table (permanent videos)
+              // Try to get from youtube table
               itemData = await getYoutubeVideo(like.target_id);
-              console.log(`📺 Result from permanent youtube table:`, itemData ? 'Found' : 'Not found');
+              console.log(`📺 Result from youtube table:`, itemData ? 'Found' : 'Not found');
             }
             
             if (itemData) {
@@ -116,51 +115,6 @@ export default function HomeScreen({
                 nextLiked.push(item);
               } else {
                 nextDisliked.push(item);
-              }
-            } else {
-              // If not found in youtube table, try youtube_current_recs table (regenerated videos)
-              console.log(`🔍 Trying to fetch from youtube_current_recs table for rec_id: ${like.target_id}`);
-              try {
-                const recResponse = await fetch(`/api/youtube/rec/${like.target_id}`, {
-                  method: "GET",
-                  headers: { "Content-Type": "application/json" },
-                });
-                console.log(`📺 Rec API response status: ${recResponse.status}`);
-                if (recResponse.ok) {
-                  const recData = await recResponse.json();
-                  console.log(`📺 Rec API response data:`, recData);
-                  if (recData.success && recData.video) {
-                    itemData = recData.video;
-                    // Convert database format to Item format for rec data
-                    const item: Item = {
-                      id: Date.now() + Math.random(), // Generate unique ID for display
-                      title: itemData.video_title,
-                      database_id: itemData.rec_id, // Use rec_id for regenerated videos
-                      target_type: 'youtube' as const,
-                      project_id: itemData.project_id,
-                      meta: {
-                        channel: "YouTube",
-                        duration: itemData.video_duration,
-                        views: parseInt(itemData.video_views) || 0,
-                        likes: parseInt(itemData.video_likes) || 0,
-                        video_url: itemData.video_url,
-                        score: itemData.score,
-                        calculated_score: itemData.calculated_score,
-                        rank_position: itemData.rank_position
-                      },
-                      feedback: like.isLiked ? 'accept' : 'reject',
-                      liked_disliked_id: like.liked_disliked_id
-                    };
-                    
-                    if (like.isLiked) {
-                      nextLiked.push(item);
-                    } else {
-                      nextDisliked.push(item);
-                    }
-                  }
-                }
-              } catch (recError) {
-                console.error(`Failed to fetch rec data for ${like.target_id}:`, recError);
               }
             }
           } else if (like.target_type === 'paper') {

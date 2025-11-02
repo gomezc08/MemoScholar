@@ -80,15 +80,11 @@ class YoutubeGenerator:
             self.logger.info("No project_id provided, skipping duplicate check")
             return videos
             
-        # Get past recommendations from both youtube table and youtube_current_recs table
-        past_recommendations = self.db_select.get_project_youtube_videos(data['project_id']) or []
+        # Get all videos from youtube table (including both recommended and unrecommended)
+        past_recommendations = self.db_select.get_all_project_youtube_videos(data['project_id']) or []
         
-        # Also check youtube_current_recs for any videos that might be there
-        past_current_recs = self.db_select.get_project_youtube_current_recs(data['project_id']) or []
-        
-        # Combine both sources and extract video titles for comparison
-        all_past_videos = past_recommendations + past_current_recs
-        past_titles = {rec['video_title'] for rec in all_past_videos}
+        # Extract video titles for comparison
+        past_titles = {rec['video_title'] for rec in past_recommendations}
         
         self.logger.info(f"Found {len(past_titles)} unique past video titles to avoid")
         
@@ -153,8 +149,8 @@ class YoutubeGenerator:
                     "video_title": video_title,
                     "video_description": video_description,
                     "video_duration": parsed_duration,   # Now in HH:MM:SS format
-                    "video_views": stats.get("viewCount"),
-                    "video_likes": stats.get("likeCount"),
+                    "video_views": int(stats.get("viewCount", 0) or 0),
+                    "video_likes": int(stats.get("likeCount", 0) or 0),
                     "video_url": f"https://www.youtube.com/watch?v={v.get('id')}",
                     "video_embedding": video_embedding
                 })
@@ -184,13 +180,25 @@ class YoutubeGenerator:
 
         unique_videos = self._avoid_duplicate_videos(raw_videos, data)
 
-        # Insert videos into youtube_current_recs table
+        # Convert raw videos to format expected by jaccard_recommender.add_candidates
         if 'project_id' in data and unique_videos:
+            formatted_candidates = []
+            for video in unique_videos:
+                formatted_candidates.append({
+                    'title': video['video_title'],
+                    'description': video['video_description'],
+                    'duration_time': video['video_duration'],
+                    'url': video['video_url'],
+                    'views': video['video_views'],
+                    'likes': video['video_likes']
+                })
+            
+            # Add candidates to youtube table
             try:
-                inserted_ids = self.db_insert.insert_youtube_current_recs(data['project_id'], unique_videos)
-                self.logger.info(f"Successfully inserted {len(inserted_ids)} videos into youtube_current_recs")
+                added_ids = self.jaccard_video_recommender.add_candidates(data['project_id'], formatted_candidates)
+                self.logger.info(f"Successfully added {len(added_ids)} videos to youtube table")
             except Exception as e:
-                self.logger.error(f"Failed to insert videos into youtube_current_recs: {str(e)}")
+                self.logger.error(f"Failed to add videos to youtube table: {str(e)}")
                 raise
         
         # Handle optional fields with defaults
@@ -207,10 +215,9 @@ class YoutubeGenerator:
         for rec in jaccard_recs:
             # Log without problematic characters to avoid UnicodeEncodeError
             safe_rec = {
-                'rec_id': rec.get('rec_id'),
+                'youtube_id': rec.get('youtube_id'),
                 'video_title': self._safe_encode_string(rec.get('video_title', '')),
-                'score': rec.get('calculated_score'),
-                'rank_position': rec.get('rank_position')
+                'score': rec.get('calculated_score')
             }
             self.logger.info(f"Jaccard rec: {safe_rec}")
             # rec is already a dictionary with full video details and score
