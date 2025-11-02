@@ -39,11 +39,13 @@ class DBSelect:
             print(f"get_user error: {e}")
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def get_user_by_email(self, email):
         """Get a user by email"""
-        self.connector.open_connection()
+        if self.manage_connection:
+            self.connector.open_connection()
         try:
             query = "SELECT user_id, name, email FROM users WHERE email = %s"
             self.connector.cursor.execute(query, (email,))
@@ -59,7 +61,8 @@ class DBSelect:
             print(f"get_user_by_email error: {e}")
             return None
         finally:
-            self.connector.close_connection()
+            if self.manage_connection:
+                self.connector.close_connection()
     
     def get_all_users(self):
         """Get all users"""
