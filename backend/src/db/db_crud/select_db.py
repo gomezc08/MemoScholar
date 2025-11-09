@@ -679,3 +679,157 @@ class DBSelect:
         finally:
             self.connector.close_connection()
     
+    def get_youtube_features_by_category(self, youtube_id):
+        """
+        Get features for a YouTube video organized by category.
+        Returns Dict[str, Set[str]] mapping category -> Set of feature values.
+        """
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT category, feature
+                FROM youtube_features
+                WHERE youtube_id = %s
+            """
+            self.connector.cursor.execute(query, (youtube_id,))
+            results = self.connector.cursor.fetchall()
+            
+            features_by_category = {}
+            for category, feature_value in results:
+                if category not in features_by_category:
+                    features_by_category[category] = set()
+                features_by_category[category].add(feature_value)
+            
+            return features_by_category
+        except Exception as e:
+            print(f"get_youtube_features_by_category error: {e}")
+            return {}
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+    
+    def get_liked_youtube_ids(self, project_id):
+        """Get list of liked YouTube video IDs for a project."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT target_id
+                FROM likes
+                WHERE project_id = %s AND target_type = 'youtube' AND isLiked = TRUE
+            """
+            self.connector.cursor.execute(query, (project_id,))
+            results = self.connector.cursor.fetchall()
+            return [row[0] for row in results]
+        except Exception as e:
+            print(f"get_liked_youtube_ids error: {e}")
+            return []
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+    
+    def get_disliked_youtube_ids(self, project_id):
+        """Get list of disliked YouTube video IDs for a project."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT target_id
+                FROM likes
+                WHERE project_id = %s AND target_type = 'youtube' AND isLiked = FALSE
+            """
+            self.connector.cursor.execute(query, (project_id,))
+            results = self.connector.cursor.fetchall()
+            return [row[0] for row in results]
+        except Exception as e:
+            print(f"get_disliked_youtube_ids error: {e}")
+            return []
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+    
+    def get_youtube_videos_for_feature_update(self, project_id=None):
+        """
+        Get YouTube videos with duration, views, and likes for feature updates.
+        Returns list of tuples: (youtube_id, duration_sec, views, likes)
+        """
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            if project_id is None:
+                query = """
+                    SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
+                           video_views, video_likes
+                    FROM youtube
+                """
+                self.connector.cursor.execute(query)
+            else:
+                query = """
+                    SELECT youtube_id, TIME_TO_SEC(video_duration) AS video_duration_sec,
+                           video_views, video_likes
+                    FROM youtube
+                    WHERE project_id = %s
+                """
+                self.connector.cursor.execute(query, (project_id,))
+            return self.connector.cursor.fetchall()
+        except Exception as e:
+            print(f"get_youtube_videos_for_feature_update error: {e}")
+            return []
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+    
+    def get_unrecommended_youtube_videos(self, project_id):
+        """
+        Fetch videos that haven't been recommended yet.
+        Returns list of tuples: (youtube_id, video_title, video_description, video_duration_sec, video_url, video_views, video_likes)
+        """
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT
+                    y.youtube_id,
+                    y.video_title,
+                    y.video_description,
+                    TIME_TO_SEC(y.video_duration) AS video_duration_sec,
+                    y.video_url,
+                    y.video_views,
+                    y.video_likes
+                FROM youtube y
+                WHERE y.project_id = %s
+                AND NOT EXISTS (
+                    SELECT 1 FROM youtube_has_rec yhr
+                    WHERE yhr.youtube_id = y.youtube_id 
+                    AND yhr.hasBeenRecommended = TRUE
+                )
+            """
+            self.connector.cursor.execute(query, (project_id,))
+            return self.connector.cursor.fetchall()
+        except Exception as e:
+            print(f"get_unrecommended_youtube_videos error: {e}")
+            return []
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+    
+    def check_youtube_video_exists(self, project_id, video_title):
+        """Check if a YouTube video with the given title exists for a project."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT youtube_id FROM youtube 
+                WHERE project_id = %s AND video_title = %s
+            """
+            self.connector.cursor.execute(query, (project_id, video_title))
+            result = self.connector.cursor.fetchone()
+            return result is not None
+        except Exception as e:
+            print(f"check_youtube_video_exists error: {e}")
+            return False
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+    
