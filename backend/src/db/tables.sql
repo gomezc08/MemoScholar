@@ -2,8 +2,11 @@
 DROP TABLE IF EXISTS likes;
 DROP TABLE IF EXISTS youtube_has_rec;
 DROP TABLE IF EXISTS youtube_features;
+DROP TABLE IF EXISTS youtube_video_embeddings;
 DROP TABLE IF EXISTS youtube_embeddings;
 DROP TABLE IF EXISTS youtube;
+DROP TABLE IF EXISTS paper_features;
+DROP TABLE IF EXISTS paper_embeddings;
 DROP TABLE IF EXISTS paperauthors;
 DROP TABLE IF EXISTS authors;
 DROP TABLE IF EXISTS papers;
@@ -74,6 +77,24 @@ CREATE TABLE paperauthors (
   FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE CASCADE
 );
 
+-- Paper Embeddings Cache
+CREATE TABLE paper_embeddings (
+	paper_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    paper_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    embedding  VECTOR(1536) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (paper_id) REFERENCES papers(paper_id) ON DELETE CASCADE
+);
+
+-- Paper Features
+CREATE TABLE paper_features (
+	paper_feature_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    paper_id         BIGINT UNSIGNED NOT NULL,
+    category         ENUM('year','author','cite','fresh','type','kw','emb') NOT NULL,
+    feature          VARCHAR(64) NOT NULL,
+    FOREIGN KEY (paper_id) REFERENCES papers(paper_id) ON DELETE CASCADE
+);
+
 -- YouTube
 CREATE TABLE youtube (
   youtube_id        BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -104,11 +125,20 @@ CREATE TABLE youtube_embeddings (
     FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
 );
 
+-- YouTube Video Embeddings Cache
+CREATE TABLE youtube_video_embeddings (
+	youtube_video_embedding_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    youtube_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    embedding  VECTOR(1536) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (youtube_id) REFERENCES youtube(youtube_id) ON DELETE CASCADE
+);
+
 -- YouTube Feautures
 CREATE TABLE youtube_features (
 	youtube_feature_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     youtube_id         BIGINT UNSIGNED NOT NULL,
-    category           ENUM('dur','fresh','pop','type','tok','kp','emb') NOT NULL,
+    category           ENUM('dur','fresh','pop','type','tok','kp','emb','engage') NOT NULL,
     feature            VARCHAR(64) NOT NULL,
     FOREIGN KEY (youtube_id) REFERENCES youtube(youtube_id) ON DELETE CASCADE
 );
