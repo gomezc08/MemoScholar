@@ -502,38 +502,28 @@ class TaskManager:
             error_msg = f"Query not found with ID: {query_id}"
             self.logger.error(error_msg)
             raise RuntimeError(error_msg)
-        
+
         self.logger.info(f"Retrieved query result: {query_result}")
         paper_data = self.paper_generator.generate_paper(data, query_result)
         self.logger.info(f"Generated paper data: {type(paper_data)}")
+
+        # Papers are already in database from Jaccard add_candidates()
+        # Just need to return them with their IDs
         papers = paper_data.get('papers', [])
+        self.logger.info(f"Jaccard recommender returned {len(papers)} papers")
+
+        # Papers already have paper_id from the recommend() call
+        # Format them for the response
         papers_with_ids = []
-        
         for paper in papers:
-            # Extract authors from paper data
-            authors_list = paper.get('authors', [])
-            
-            # Create paper with authors
-            paper_id = self.db_insert.create_paper_with_authors(
-                project_id, 
-                query_id, 
-                paper.get('title', ''), 
-                paper.get('summary', ''), 
-                paper.get('year', 2024), 
-                paper.get('pdf_link', ''),
-                authors_list
-            )
-            
-            if paper_id:
-                # Add database ID to the paper data
-                paper_with_id = paper.copy()
-                paper_with_id['paper_id'] = paper_id
-                papers_with_ids.append(paper_with_id)
-                self.logger.info(f"Created paper with ID {paper_id}: {paper.get('title', 'Unknown')}")
-            else:
-                self.logger.warning(f"Failed to create paper: {paper.get('title', 'Unknown')}")
-        
-        
+            papers_with_ids.append({
+                'paper_id': paper.get('paper_id'),
+                'title': paper.get('paper_title'),
+                'pdf_link': paper.get('pdf_link'),
+                'score': paper.get('calculated_score')
+            })
+            self.logger.info(f"Paper {paper.get('paper_id')}: {paper.get('paper_title', 'Unknown')[:50]} (score: {paper.get('calculated_score', 0):.4f})")
+
         self.logger.info(f"SUCCESSFULLY RAN API CALL - Created project ID: {project_id}")
         self.logger.info(f"Returning {len(papers_with_ids)} papers with IDs")
         return papers_with_ids  

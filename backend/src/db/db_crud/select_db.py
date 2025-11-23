@@ -651,7 +651,47 @@ class DBSelect:
         finally:
             if self.manage_connection:
                 self.connector.close_connection()
-    
+
+    def get_youtube_video_embedding(self, youtube_id):
+        """Get cached embedding for a specific YouTube video."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT embedding
+                FROM youtube_video_embeddings
+                WHERE youtube_id = %s
+            """
+            self.connector.cursor.execute(query, (youtube_id,))
+            result = self.connector.cursor.fetchone()
+            return self._convert_embedding(result[0]) if result else None
+        except Exception as e:
+            print(f"get_youtube_video_embedding error: {e}")
+            return None
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+
+    def get_paper_embedding(self, paper_id):
+        """Get cached embedding for a specific paper."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            query = """
+                SELECT embedding
+                FROM paper_embeddings
+                WHERE paper_id = %s
+            """
+            self.connector.cursor.execute(query, (paper_id,))
+            result = self.connector.cursor.fetchone()
+            return self._convert_embedding(result[0]) if result else None
+        except Exception as e:
+            print(f"get_paper_embedding error: {e}")
+            return None
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+
     def get_youtube_features(self, youtube_id):
         """Get all features for a YouTube video"""
         self.connector.open_connection()

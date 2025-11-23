@@ -1,256 +1,344 @@
-# src/recs/jaccard_papers.py
-import re
-from dataclasses import dataclass
+# src/jaccard_coefficient/jaccard_papers.py
 from typing import List, Dict, Set, Optional, Tuple
-
 from src.db.connector import Connector
+from src.db.db_crud.select_db import DBSelect
+from src.db.db_crud.insert import DBInsert
+from src.text_embedding.embedding import Embedding
+from src.jaccard_coefficient.features import Features
+from src.utils.logging_config import get_logger
 
-_STOP = {
-    "a","an","the","and","or","but","if","then","else","for","to","of","in","on","by","with",
-    "from","into","at","is","are","was","were","be","been","being","as","it","this","that",
-    "these","those","we","you","they","he","she","i","me","my","our","your","their","them",
-    "about","over","under","between","within","without","than","so","do","does","did","done",
-    "can","could","should","would","may","might","will","just","not","no","yes"
-}
-_WORD_RE = re.compile(r"[a-z0-9]+")
-
-def _tokenize(text: str) -> List[str]:
-    if not text:
-        return []
-    text = text.lower()
-    toks = _WORD_RE.findall(text)
-    return [t for t in toks if len(t) > 2 and t not in _STOP]
-
-def _normalize_author(name: str) -> Optional[str]:
-    if not name: return None
-    name = name.strip().lower()
-    name = re.sub(r"[^a-z0-9\s]", "", name)
-    name = re.sub(r"\s+", "_", name)
-    name = name.strip("_")
-    return name or None
-
-def _year_2yr_bucket(year: Optional[int]) -> Optional[str]:
-    if not year: return None
-    start = year - (year % 2)
-    end = start + 1
-    return f"year:{start}-{end}"
-
-def _jaccard(A: Set[str], B: Set[str]) -> float:
-    if not A or not B: return 0.0
-    inter = len(A & B)
-    union = len(A | B)
-    return inter / union if union else 0.0
-
-@dataclass
-class ScoredItem:
-    paper_id: int
-    title: str
-    url: Optional[str]
-    score: float
+logger = get_logger(__name__)
 
 class JaccardPaperRecommender:
     """
+    Feature-based Jaccard coefficient recommender for academic papers.
+
+    Algorithm:
+    ----------
+    1. Build positive profile P^+ from liked papers' features
+    2. Build negative profile P^- from disliked papers' features (optional)
+    3. For each candidate paper i, compute weighted Jaccard similarity:
+       J^+(P, i) = Σ α_category × |P^+_category ∩ I_category| / |P^+_category ∪ I_category|
+    4. Final score: S(P, i) = J^+(P, i) - λ × J^-(P, i)
+
+    Features:
+    ---------
+    - emb: Semantic similarity (from embeddings) - HIGH WEIGHT
+    - year: Publication year buckets
+    - author: Normalized author names
+    - type: Content type (paper)
+
     Public API:
-      - update_features(project_id: Optional[int] = None) -> None
-      - recommend(project_id: int, topk: int = 5, include_likes: bool = True) -> List[ScoredItem]
+    -----------
+    - add_candidates(project_id, candidates) -> List[int]: Add papers and compute features
+    - recommend(project_id, topk) -> List[Dict]: Get top-k recommendations
     """
+
+    # Feature weights (must sum to 1.0)
+    WEIGHTS = {
+        'emb': 0.60,     # Semantic similarity (primary signal)
+        'year': 0.20,    # Publication recency
+        'author': 0.15,  # Author matching
+        'type': 0.05,    # Content type
+    }
+
     def __init__(self, connector: Connector):
         self.cx = connector
-        if self.cx.cursor is None:
+        self.features = Features()
+        # Create DB instances but they'll use the shared connector
+        self.db_select = DBSelect()
+        self.db_insert = DBInsert()
+        self.embedding = Embedding()
+
+        # Share the open connection with DBSelect and DBInsert
+        self.db_select.connector = self.cx
+        self.db_insert.connector = self.cx
+        # Disable connection management for shared connection
+        self.db_select.manage_connection = False
+        self.db_insert.manage_connection = False
+
+    def _ensure_connection(self) -> None:
+        """Ensure database connection is open"""
+        if self.cx.cursor is None or self.cx.cnx is None or not self.cx.cnx.is_connected():
             self.cx.open_connection()
 
-    # ---------------- Public methods ----------------
+    def weighted_jaccard(self, prof: Dict[str, Set[str]], item: Dict[str, Set[str]]) -> float:
+        """
+        Compute weighted Jaccard similarity between profile and item.
 
-    def update_features(self, project_id: Optional[int] = None) -> None:
-        self._ensure_tables()
-        if project_id is None:
-            self._upsert_all_project_features()
-            self._upsert_all_paper_features()
-        else:
-            self._upsert_project_features(project_id)
-            self._upsert_paper_features(project_id)
+        Args:
+            prof: Profile features Dict[category -> Set[feature_values]]
+            item: Item features Dict[category -> Set[feature_values]]
 
-    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True) -> List[ScoredItem]:
-        proj_feats = self._load_project_feature_set(project_id, include_likes=include_likes)
-        pp_rows = self._fetch_paper_candidates(project_id)
+        Returns:
+            Weighted Jaccard score in [0, 1]
+        """
+        if not prof or not item:
+            return 0.0
 
-        scored: List[ScoredItem] = []
-        for p in pp_rows:
-            # p format: (paper_id, paper_title, pdf_link)
-            feats = self._load_item_feature_set("paper", p[0])  # p[0] is paper_id
-            s = _jaccard(proj_feats, feats)
-            scored.append(ScoredItem(paper_id=p[0], title=p[1], url=p[2], score=s))  # p[1] is paper_title, p[2] is pdf_link
+        total_score = 0.0
+        for category, weight in self.WEIGHTS.items():
+            p_feats = prof.get(category, set())
+            i_feats = item.get(category, set())
 
-        scored.sort(key=lambda r: r.score, reverse=True)
-        return scored[:topk]
+            if not p_feats and not i_feats:
+                continue
+
+            intersection = len(p_feats & i_feats)
+            union = len(p_feats | i_feats)
+
+            if union > 0:
+                jaccard = intersection / union
+                total_score += weight * jaccard
+
+        return total_score
+
+    def add_candidates(self, project_id: int, candidates: List[Dict]) -> List[int]:
+        """
+        Add paper candidates to database and compute features.
+
+        Args:
+            project_id: Project ID
+            candidates: List of paper dicts with keys:
+                - title: Paper title
+                - summary: Paper abstract/summary
+                - year: Publication year
+                - authors: List of author names
+                - pdf_link: PDF URL
+
+        Returns:
+            List of paper_ids that were added
+        """
+        self._ensure_connection()
+        cur = self.cx.cursor
+
+        added_ids = []
+        for idx, c in enumerate(candidates):
+            logger.info(f"Processing paper {idx+1}/{len(candidates)}: {c.get('title', 'Unknown')[:50]}")
+            title = c.get("title")
+            if not title:
+                continue
+
+            summary = c.get("summary", "")
+            year = c.get("year")
+            pdf_link = c.get("pdf_link")
+            authors_list = c.get("authors", [])
+
+            # Check if paper already exists
+            cur.execute("""
+                SELECT paper_id FROM papers
+                WHERE project_id=%s AND paper_title=%s
+            """, (project_id, title))
+
+            if cur.fetchone():
+                continue  # Skip if already exists
+
+            # Insert paper
+            cur.execute(
+                """
+                INSERT INTO papers(project_id, paper_title, paper_summary, published_year, pdf_link)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (project_id, title, summary, year, pdf_link)
+            )
+            paper_id = cur.lastrowid
+            added_ids.append(paper_id)
+
+            # Insert authors
+            for author_name in authors_list:
+                if not author_name:
+                    continue
+
+                # Check if author exists
+                cur.execute("SELECT author_id FROM authors WHERE name=%s", (author_name,))
+                author_row = cur.fetchone()
+
+                if author_row:
+                    author_id = author_row[0]
+                else:
+                    # Create new author
+                    cur.execute("INSERT INTO authors(name) VALUES (%s)", (author_name,))
+                    author_id = cur.lastrowid
+
+                # Link paper to author
+                cur.execute(
+                    "INSERT INTO paperauthors(paper_id, author_id) VALUES (%s, %s)",
+                    (paper_id, author_id)
+                )
+
+            # Compute semantic similarity
+            sem_score = self._compute_semantic_similarity(project_id, paper_id, title, summary)
+
+            # Generate features
+            features_list = self.features.paper_features(
+                title=title,
+                summary=summary,
+                year=year,
+                authors=authors_list,
+                sem_score=sem_score
+            )
+
+            # Insert features
+            sem_display = sem_score if sem_score is not None else 0.0
+            logger.info(f"Inserting features for paper_id {paper_id} (sem_score={sem_display:.4f})")
+            self.db_insert.insert_paper_features(paper_id, features_list)
+            logger.info(f"Successfully inserted features for paper_id {paper_id}")
+
+        logger.info(f"Committing {len(added_ids)} added papers")
+        self.cx.cnx.commit()
+        logger.info(f"add_candidates complete, returning {len(added_ids)} added IDs")
+        return added_ids
+
+    def recommend(self, project_id: int, topk: int = 5, include_likes: bool = True, lambda_dislike: float = 0.5) -> List[Dict]:
+        """
+        Score all papers and return top-k recommendations.
+
+        Args:
+            project_id: The project ID
+            topk: Number of recommendations to return
+            include_likes: Whether to include liked papers in the positive profile
+            lambda_dislike: Weight for negative signal from disliked items
+
+        Returns:
+            List of top-k recommended papers with scores
+        """
+        self._ensure_connection()
+        logger.info(f"Starting recommendation for project_id={project_id}, topk={topk}, include_likes={include_likes}")
+
+        # Load project features (liked items + project text)
+        proj_features = self._load_project_features(project_id, include_likes=include_likes)
+        logger.info(f"Loaded project features: {[(cat, len(feats)) for cat, feats in proj_features.items()]}")
+
+        # Load disliked features
+        disliked_features = self._load_disliked_features(project_id)
+        if disliked_features:
+            logger.info(f"Loaded disliked features: {[(cat, len(feats)) for cat, feats in disliked_features.items()]}")
+
+        # Fetch candidate papers (all papers for now - can add filtering later)
+        cand_rows = self._fetch_candidate_papers(project_id)
+        logger.info(f"Found {len(cand_rows)} candidate papers")
+
+        scored: List[Tuple[int, str, Optional[str], float]] = []
+        for idx, r in enumerate(cand_rows):
+            # Extract features from candidate row
+            cand_features = self._extract_features_from_paper_row(r)
+
+            # Debug: log features for first few papers
+            if idx < 3:
+                logger.info(f"Paper {idx+1} '{r[1][:50]}' features: {[(cat, list(feats)) for cat, feats in cand_features.items()]}")
+
+            # Calculate J^+ (positive jaccard)
+            pos_score = self.weighted_jaccard(proj_features, cand_features)
+
+            # Calculate J^- (negative jaccard)
+            neg_score = self.weighted_jaccard(disliked_features, cand_features) if disliked_features else 0.0
+
+            # Calculate final score: S(P, i) = J^+(P, i) - λ * J^-(P, i)
+            final_score = max(0.0, pos_score - lambda_dislike * neg_score)
+
+            if idx < 3:
+                logger.info(f"Paper {idx+1} scores: pos={pos_score:.4f}, neg={neg_score:.4f}, final={final_score:.4f}")
+
+            scored.append((r[0], r[1], r[2], final_score))  # paper_id, title, pdf_link, score
+
+        # Sort by score descending
+        scored_sorted = sorted(scored, key=lambda x: x[3], reverse=True)
+
+        # Log top scores
+        if scored_sorted:
+            logger.info(f"Top 5 scores: {[f'{s[1][:30]}={s[3]:.4f}' for s in scored_sorted[:5]]}")
+
+        # Take top-k
+        top_k = scored_sorted[:topk]
+        logger.info(f"Returning {len(top_k)} recommendations")
+
+        # Format results
+        results = []
+        for paper_id, title, pdf_link, score in top_k:
+            results.append({
+                'paper_id': paper_id,
+                'paper_title': title,
+                'pdf_link': pdf_link,
+                'calculated_score': score
+            })
+
+        return results
 
     # ---------------- Private helpers ----------------
 
-    def _ensure_tables(self) -> None:
+    def _load_project_features(self, project_id: int, include_likes: bool) -> Dict[str, Set[str]]:
+        """Load project features from liked papers."""
+        self._ensure_connection()
         cur = self.cx.cursor
-        try:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS project_features (
-                  project_id INT NOT NULL,
-                  feature TEXT NOT NULL,
-                  FOREIGN KEY (project_id) REFERENCES project(project_id) ON DELETE CASCADE
-                )
-            """)
-        except Exception:
-            # Table might already exist, ignore the error
-            pass
-        try:
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_project_features_project ON project_features(project_id)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_project_features_feature  ON project_features(feature)")
-        except Exception:
-            pass
 
-        try:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS item_features (
-                  target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('youtube','paper')),
-                  target_id INT NOT NULL,
-                  feature TEXT NOT NULL
-                )
-            """)
-        except Exception:
-            # Table might already exist, ignore the error
-            pass
-        try:
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_item_features_target ON item_features(target_type, target_id)")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_item_features_feature ON item_features(feature)")
-        except Exception:
-            pass
-        self.cx.cnx.commit()
+        # Initialize feature categories
+        features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
 
-    def _project_row_with_latest_query(self, project_id: int) -> Optional[Tuple]:
-        cur = self.cx.cursor
-        cur.execute("""
-            SELECT p.project_id, p.topic, p.objective, p.guidelines,
-                   q.queries_text, q.special_instructions
-            FROM project p
-            LEFT JOIN (
-                SELECT project_id, queries_text, special_instructions
-                FROM queries
-                WHERE project_id = %s
-                ORDER BY query_id DESC
-                LIMIT 1
-            ) q ON q.project_id = p.project_id
-            WHERE p.project_id = %s
-        """, (project_id, project_id))
-        rows = cur.fetchall()
-        return rows[0] if rows else None
-
-    def _project_features_from_row(self, row: Tuple) -> Set[str]:
-        # row format: (project_id, topic, objective, guidelines, queries_text, special_instructions)
-        txt = " ".join([
-            row[1] or "",  # topic
-            row[2] or "",  # objective
-            row[3] or "",  # guidelines
-            row[4] or "",  # queries_text
-            row[5] or "",  # special_instructions
-        ])
-        feats = {f"qtok:{t}" for t in _tokenize(txt)}
-        low = txt.lower()
-        if re.search(r"\bshort\b", low): feats.add("pref:dur_short")
-        if re.search(r"\brecent\b|\bnew\b|\b202[3-9]\b", low): feats.add("pref:rec_new")
-        return feats
-
-    def _upsert_project_features(self, project_id: int) -> None:
-        row = self._project_row_with_latest_query(project_id)
-        if not row:
-            return
-        feats = self._project_features_from_row(row)
-        cur = self.cx.cursor
-        cur.execute("DELETE FROM project_features WHERE project_id = %s", (project_id,))
-        if feats:
-            cur.executemany(
-                "INSERT INTO project_features(project_id, feature) VALUES (%s, %s)",
-                [(project_id, f) for f in feats]
-            )
-        self.cx.cnx.commit()
-
-    def _upsert_all_project_features(self) -> None:
-        cur = self.cx.cursor
-        cur.execute("SELECT project_id FROM project")
-        pids = [r[0] for r in cur.fetchall()]  # r[0] is project_id
-        for pid in pids:
-            self._upsert_project_features(pid)
-
-    def _paper_features_from_row(self, row: Tuple, authors: List[str]) -> Set[str]:
-        # row format: (paper_id, project_id, paper_title, paper_summary, published_year, pdf_link)
-        feats = set()
-        text = f"{row[2] or ''} {row[3] or ''}"  # paper_title, paper_summary
-        feats |= {f"tok:{t}" for t in _tokenize(text)}
-        for a in authors:
-            na = _normalize_author(a)
-            if na: feats.add(f"author:{na}")
-        yb = _year_2yr_bucket(row[4])  # published_year
-        if yb: feats.add(yb)
-        feats.add("type:paper")
-        return feats
-
-    def _upsert_paper_features(self, project_id: Optional[int] = None) -> None:
-        cur = self.cx.cursor
-        if project_id is None:
-            cur.execute("""
-                SELECT paper_id, project_id, paper_title, paper_summary, published_year, pdf_link
-                FROM papers
-            """)
-        else:
-            cur.execute("""
-                SELECT paper_id, project_id, paper_title, paper_summary, published_year, pdf_link
-                FROM papers
-                WHERE project_id = %s
-            """, (project_id,))
-        rows = cur.fetchall()
-        for r in rows:
-            cur.execute("""
-                SELECT a.name
-                FROM paperauthors pa
-                JOIN authors a ON a.author_id = pa.author_id
-                WHERE pa.paper_id = %s
-            """, (r[0],))  # r[0] is paper_id
-            authors = [row[0] for row in cur.fetchall()]  # row[0] is name
-            feats = self._paper_features_from_row(r, authors)
-
-            cur.execute("DELETE FROM item_features WHERE target_type='paper' AND target_id=%s", (r[0],))  # r[0] is paper_id
-            if feats:
-                cur.executemany(
-                    "INSERT INTO item_features(target_type, target_id, feature) VALUES (%s,%s,%s)",
-                    [("paper", r[0], f) for f in feats]  # r[0] is paper_id
-                )
-        self.cx.cnx.commit()
-
-    def _load_project_feature_set(self, project_id: int, include_likes: bool) -> Set[str]:
-        cur = self.cx.cursor
-        cur.execute("SELECT feature FROM project_features WHERE project_id=%s", (project_id,))
-        feats = {r[0] for r in cur.fetchall()}  # r[0] is feature
+        # Add liked papers' features
         if include_likes:
             cur.execute("""
-                SELECT target_type, target_id
+                SELECT target_id
                 FROM likes
-                WHERE project_id=%s AND isLiked = TRUE
+                WHERE project_id=%s AND target_type='paper' AND isLiked = TRUE
             """, (project_id,))
-            for lk in cur.fetchall():
-                if lk[0] != "paper":  # lk[0] is target_type, papers recommender uses only paper likes
-                    continue
-                cur.execute("""
-                    SELECT feature FROM item_features
-                    WHERE target_type='paper' AND target_id=%s
-                """, (lk[1],))  # lk[1] is target_id
-                feats |= {r[0] for r in cur.fetchall()}  # r[0] is feature
-        return feats
 
-    def _load_item_feature_set(self, target_type: str, target_id: int) -> Set[str]:
+            for (target_id,) in cur.fetchall():
+                paper_features = self._get_paper_features(target_id)
+                for category, feature_set in paper_features.items():
+                    features_by_category[category] |= feature_set
+
+        return features_by_category
+
+    def _load_disliked_features(self, project_id: int) -> Optional[Dict[str, Set[str]]]:
+        """Load features from disliked papers."""
+        self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
-            SELECT feature FROM item_features
-            WHERE target_type=%s AND target_id=%s
-        """, (target_type, target_id))
-        return {r[0] for r in cur.fetchall()}  # r[0] is feature
+            SELECT target_id
+            FROM likes
+            WHERE project_id=%s AND target_type='paper' AND isLiked = FALSE
+        """, (project_id,))
 
-    def _fetch_paper_candidates(self, project_id: int) -> List[Tuple]:
+        disliked_ids = [r[0] for r in cur.fetchall()]
+        if not disliked_ids:
+            return None
+
+        features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
+        for paper_id in disliked_ids:
+            paper_features = self._get_paper_features(paper_id)
+            for category, feature_set in paper_features.items():
+                features_by_category[category] |= feature_set
+
+        return features_by_category
+
+    def _get_paper_features(self, paper_id: int) -> Dict[str, Set[str]]:
+        """Get features for a specific paper from paper_features table."""
+        self._ensure_connection()
+        cur = self.cx.cursor
+        cur.execute("""
+            SELECT category, feature
+            FROM paper_features
+            WHERE paper_id = %s
+        """, (paper_id,))
+
+        features_by_category = {cat: set() for cat in self.WEIGHTS.keys()}
+        for category, feature_value in cur.fetchall():
+            features_by_category[category].add(feature_value)
+
+        return features_by_category
+
+    def _extract_features_from_paper_row(self, row: Tuple) -> Dict[str, Set[str]]:
+        """
+        Extract features from a papers table row.
+        row format: (paper_id, paper_title, pdf_link)
+        """
+        # Fetch features from paper_features table
+        paper_id = row[0]
+        return self._get_paper_features(paper_id)
+
+    def _fetch_candidate_papers(self, project_id: int) -> List[Tuple]:
+        """Fetch all papers for a project."""
+        self._ensure_connection()
         cur = self.cx.cursor
         cur.execute("""
             SELECT paper_id, paper_title, pdf_link
@@ -258,3 +346,51 @@ class JaccardPaperRecommender:
             WHERE project_id = %s
         """, (project_id,))
         return cur.fetchall()
+
+    def _compute_semantic_similarity(self, project_id: int, paper_id: int, title: str, summary: Optional[str]) -> Optional[float]:
+        """
+        Compute semantic similarity between project and paper using embeddings.
+        Uses cached paper embeddings to avoid redundant API calls.
+
+        Args:
+            project_id: The project ID
+            paper_id: The paper ID (for caching)
+            title: Paper title
+            summary: Paper summary/abstract
+
+        Returns:
+            Cosine similarity score between 0 and 1, or None if embeddings unavailable
+        """
+        try:
+            # Get project embedding
+            project_embedding = self.db_select.get_project_embedding(project_id)
+            if not project_embedding:
+                logger.warning(f"No project embedding found for project_id={project_id}")
+                return None
+
+            # Check cache for paper embedding
+            paper_embedding = self.db_select.get_paper_embedding(paper_id)
+
+            if paper_embedding is None:
+                # Cache miss - generate and cache embedding
+                paper_text = f"{title}; {summary or ''}"
+                paper_embedding = self.embedding.embed_text(paper_text)
+
+                # Cache the embedding for future use
+                self.db_insert.upsert_paper_embedding(paper_id, paper_embedding)
+                logger.info(f"Generated and cached new embedding for paper_id={paper_id}")
+            else:
+                logger.info(f"Using cached embedding for paper_id={paper_id}")
+
+            # Compute cosine similarity
+            similarity = self.embedding.cosine_similarity(project_embedding, paper_embedding)
+
+            # Clamp to [0, 1]
+            clamped_similarity = max(0.0, min(1.0, similarity))
+            logger.info(f"Computed semantic similarity: raw={similarity:.4f}, clamped={clamped_similarity:.4f}")
+
+            return clamped_similarity
+
+        except Exception as e:
+            logger.error(f"Error computing semantic similarity: {e}")
+            return None

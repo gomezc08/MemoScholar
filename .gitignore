@@ -4,3 +4,4 @@ venv_memo/
 package-lock.json
 node_modules/
 package.json
+best_model_item_cf.pkl

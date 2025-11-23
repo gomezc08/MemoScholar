@@ -5,6 +5,8 @@ import xml.etree.ElementTree as ET
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
 from ..db.db_crud.select_db import DBSelect
+from ..db.connector import Connector
+from ..jaccard_coefficient.jaccard_papers import JaccardPaperRecommender
 from .create_query import CreateQuery
 
 class PaperGenerator:
@@ -15,6 +17,8 @@ class PaperGenerator:
         self.logger = get_logger(__name__)
         self.db_select = DBSelect()
         self.create_query = CreateQuery()
+        self.connector = Connector()
+        self.jaccard_paper_recommender = JaccardPaperRecommender(self.connector)
 
     def search_paper(self, query: str, max_results: int = 10):
         encoded_query = urllib.parse.quote(query)
@@ -140,79 +144,72 @@ class PaperGenerator:
 
         # 2. Retrieve papers
         try:
+            self.logger.info(f"Fetching papers from ArXiv with query: {query}")
             raw_xml = self.search_paper(query, max_results=15)
             if not raw_xml:
+                self.logger.error("ArXiv API returned no data")
                 raise ValueError("Failed to fetch papers from ArXiv")
-            
+
             # Parse the XML response
             raw_papers = self.parse_arxiv_xml(raw_xml)
             if not raw_papers:
+                self.logger.error("No papers found in ArXiv XML response")
                 raise ValueError("No papers found in ArXiv response")
-            
+
             self.logger.info(f"Successfully fetched {len(raw_papers)} papers from ArXiv")
-                
+
         except Exception as e:
-            self.logger.error(f"ArXiv API failed: {str(e)}")
+            self.logger.error(f"ArXiv API failed: {str(e)}", exc_info=True)
             raise
 
-        # 3. Single LLM call with real data
-        # Handle optional fields with defaults
-        special_instructions = data.get('user_special_instructions', '')
-        if 'project_id' in data:
-            past_recommendations = self.db_select.get_project_papers(data['project_id']) if data['project_id'] else None
-            past_recommendations = [paper['paper_title'] for paper in past_recommendations] if past_recommendations else None
-        else:
-            past_recommendations = None
-        
-        prompt = f"""
-        Given these Academic papers about {data['topic']}:
-        {json.dumps(raw_papers, indent=2, ensure_ascii=False)}
-        
-        Select up to 5 most relevant papers based on:
-        - Objective: {data['objective']}
-        - Guidelines: {data['guidelines']}
-        - Special Instructions: {special_instructions}
-        - Avoid duplicates: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'} (IMPORTANT: Do not recommend duplicate papers)
+        # 3. Format candidates for Jaccard recommender
+        self.logger.info("Formatting papers for Jaccard recommender")
+        formatted_candidates = []
+        for paper in raw_papers:
+            formatted_candidates.append({
+                'title': paper['title'],
+                'summary': paper['summary'],
+                'year': paper.get('year'),
+                'authors': paper.get('authors', []),
+                'pdf_link': paper.get('pdf_link')
+            })
+        self.logger.info(f"Formatted {len(formatted_candidates)} paper candidates")
 
-        IMPORTANT: Make sure to follow the special instructions carefully.
-
-        Return ONLY valid JSON in this exact format (no comments, no explanations):
-        {{"papers": [...]}}
-        """
-        
-        # 4. Single LLM call
+        # 4. Add candidates to database and compute features
         try:
-            self.logger.info(f"IMPORTANT: Here is the past recommendations: {json.dumps(past_recommendations, indent=2, ensure_ascii=False) if past_recommendations else 'None'}")
-            response = openai_client.run_request(
-                prompt,
-                model=self.model,
-                temperature=self.temperature
-            )
-            self.logger.info(f"OpenAI API response success: {response.get('success', False)}")
-            self.logger.info(f"Response content length: {len(response.get('content', ''))} characters")
-            
-            # Parse the JSON content from the response
-            content = response.get('content', '')
-            if content.startswith('```json'):
-                # Remove markdown code block formatting
-                content = content.replace('```json', '').replace('```', '').strip()
-            
-            # Clean up the content to extract valid JSON
-            content = self._extract_json_from_content(content)
-            
-            try:
-                parsed_data = json.loads(content)
-                # Extract papers and rename to papers
-                papers = parsed_data.get('papers', [])
-                return {
-                    'papers': papers,
-                    'success': True
-                }
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Failed to parse JSON content: {str(e)}")
-                self.logger.error(f"Content: {content}")
-                raise ValueError(f"Invalid JSON response from OpenAI: {str(e)}")
-                
+            self.logger.info(f"Adding {len(formatted_candidates)} papers to database for project {data['project_id']}")
+            added_ids = self.jaccard_paper_recommender.add_candidates(data['project_id'], formatted_candidates)
+            self.logger.info(f"Successfully added {len(added_ids)} papers to database with IDs: {added_ids}")
         except Exception as e:
-            self.logger.error(f"OpenAI API failed: {str(e)}")
-            raise   
+            self.logger.error(f"Failed to add papers to database: {str(e)}", exc_info=True)
+            raise
+
+        # 5. Get recommendations from Jaccard coefficient
+        try:
+            self.logger.info(f"Getting Jaccard recommendations for project {data['project_id']}")
+            jaccard_recs = self.jaccard_paper_recommender.recommend(data['project_id'], topk=5, include_likes=True)
+            self.logger.info(f"Jaccard recommender returned {len(jaccard_recs)} recommendations")
+
+            # Format recommendations
+            formatted_recs = []
+            for rec in jaccard_recs:
+                formatted_recs.append({
+                    'paper_id': rec.get('paper_id'),
+                    'paper_title': rec.get('paper_title'),
+                    'pdf_link': rec.get('pdf_link'),
+                    'calculated_score': rec.get('calculated_score')
+                })
+                self.logger.info(f"Recommended paper: {rec.get('paper_title')[:50]} (score: {rec.get('calculated_score', 0):.4f})")
+
+            self.logger.info(f"Returning {len(formatted_recs)} formatted paper recommendations")
+            return {
+                'papers': formatted_recs,
+                'success': True
+            }
+        except Exception as e:
+            self.logger.error(f"Failed to get Jaccard recommendations: {str(e)}", exc_info=True)
+            return {
+                'papers': [],
+                'success': False,
+                'error': str(e)
+            }   
