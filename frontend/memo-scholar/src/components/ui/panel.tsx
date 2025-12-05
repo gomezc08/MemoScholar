@@ -104,17 +104,20 @@ export function Panel({
           // Convert papers to panel items with numeric IDs
           const paperItems = result.papers.map((paper: any, index: number) => ({
             id: Date.now() + index + 1000, // Generate unique numeric ID (offset to avoid conflicts)
-            title: paper.title,
+            title: paper.paper_title || paper.title,
             database_id: paper.paper_id, // Add database ID for like/dislike functionality
             target_type: "paper" as const,
             project_id: project_id,
             meta: {
               venue: "ArXiv", // ArXiv is the source
-              year: new Date(paper.published).getFullYear(),
-              authors: paper.authors ? paper.authors.join(', ') : 'Unknown',
+              year: paper.published_year || (paper.published ? new Date(paper.published).getFullYear() : undefined),
+              authors: paper.authors ? (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) : 'Unknown',
               link: paper.link,
               pdf_link: paper.pdf_link,
-              summary: paper.summary
+              summary: paper.paper_summary || paper.summary,
+              score: paper.score,
+              calculated_score: paper.calculated_score,
+              rank_position: index + 1 // Use array index as rank position
             },
             feedback: undefined as "accept" | "reject" | undefined
           }));
@@ -309,15 +312,20 @@ export function Panel({
                     </div>
                   </a>
                 ) : kind === "paper" && it.meta.link ? (
-                  <a 
-                    href={it.meta.link} 
-                    target="_blank" 
+                  <a
+                    href={it.meta.link}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="block hover:opacity-80 transition-opacity"
                   >
                     <div className="font-medium leading-tight cursor-pointer hover:underline text-blue-400 hover:text-blue-300 transition-colors">{it.title}</div>
                     <div className="text-xs text-zinc-400">
                       <span>{it.meta.venue} • {it.meta.year} • {it.meta.authors}</span>
+                      {(it.meta.calculated_score !== undefined || it.meta.score !== undefined) && (
+                        <div className="mt-1 text-xs text-emerald-400 font-medium">
+                          Relevance Score: {((it.meta.calculated_score || it.meta.score || 0) * 100).toFixed(1)}%
+                        </div>
+                      )}
                     </div>
                     {it.meta.summary && (
                       <div className="text-xs text-zinc-400 mt-1 line-clamp-2">
@@ -329,7 +337,16 @@ export function Panel({
                   <div>
                     <div className="font-medium leading-tight text-white">{it.title}</div>
                     <div className="text-xs text-zinc-400">
-                      {kind === "paper" && <span>{it.meta.venue} • {it.meta.year}</span>}
+                      {kind === "paper" && (
+                        <>
+                          <span>{it.meta.venue} • {it.meta.year}</span>
+                          {(it.meta.calculated_score !== undefined || it.meta.score !== undefined) && (
+                            <div className="mt-1 text-xs text-emerald-400 font-medium">
+                              Relevance Score: {((it.meta.calculated_score || it.meta.score || 0) * 100).toFixed(1)}%
+                            </div>
+                          )}
+                        </>
+                      )}
                       {kind === "model" && <span>{it.meta.framework} • min VRAM {it.meta.vram}</span>}
                     </div>
                   </div>

@@ -5,3 +5,5 @@ package-lock.json
 node_modules/
 package.json
 best_model_item_cf.pkl
+backend/src/cf_recommender/models/
+backend/src/cf_recommender/data-cite/

@@ -6,7 +6,7 @@ from ..openai import openai_client
 from ..utils.logging_config import get_logger
 from ..db.db_crud.select_db import DBSelect
 from ..db.connector import Connector
-from ..jaccard_coefficient.jaccard_papers import JaccardPaperRecommender
+from ..cf_recommender.cf_paper_recommender import CFPaperRecommender
 from .create_query import CreateQuery
 
 class PaperGenerator:
@@ -18,7 +18,7 @@ class PaperGenerator:
         self.db_select = DBSelect()
         self.create_query = CreateQuery()
         self.connector = Connector()
-        self.jaccard_paper_recommender = JaccardPaperRecommender(self.connector)
+        self.cf_paper_recommender = CFPaperRecommender(self.connector)
 
     def search_paper(self, query: str, max_results: int = 10):
         encoded_query = urllib.parse.quote(query)
@@ -162,8 +162,8 @@ class PaperGenerator:
             self.logger.error(f"ArXiv API failed: {str(e)}", exc_info=True)
             raise
 
-        # 3. Format candidates for Jaccard recommender
-        self.logger.info("Formatting papers for Jaccard recommender")
+        # 3. Format candidates for CF recommender
+        self.logger.info("Formatting papers for CF recommender")
         formatted_candidates = []
         for paper in raw_papers:
             formatted_candidates.append({
@@ -175,28 +175,31 @@ class PaperGenerator:
             })
         self.logger.info(f"Formatted {len(formatted_candidates)} paper candidates")
 
-        # 4. Add candidates to database and compute features
+        # 4. Add candidates to database
         try:
             self.logger.info(f"Adding {len(formatted_candidates)} papers to database for project {data['project_id']}")
-            added_ids = self.jaccard_paper_recommender.add_candidates(data['project_id'], formatted_candidates)
+            added_ids = self.cf_paper_recommender.add_candidates(data['project_id'], formatted_candidates)
             self.logger.info(f"Successfully added {len(added_ids)} papers to database with IDs: {added_ids}")
         except Exception as e:
             self.logger.error(f"Failed to add papers to database: {str(e)}", exc_info=True)
             raise
 
-        # 5. Get recommendations from Jaccard coefficient
+        # 5. Get recommendations from CF model
         try:
-            self.logger.info(f"Getting Jaccard recommendations for project {data['project_id']}")
-            jaccard_recs = self.jaccard_paper_recommender.recommend(data['project_id'], topk=5, include_likes=True)
-            self.logger.info(f"Jaccard recommender returned {len(jaccard_recs)} recommendations")
+            self.logger.info(f"Getting CF recommendations for project {data['project_id']}")
+            cf_recs = self.cf_paper_recommender.recommend(data['project_id'], topk=5)
+            self.logger.info(f"CF recommender returned {len(cf_recs)} recommendations")
 
             # Format recommendations
             formatted_recs = []
-            for rec in jaccard_recs:
+            for rec in cf_recs:
                 formatted_recs.append({
                     'paper_id': rec.get('paper_id'),
                     'paper_title': rec.get('paper_title'),
                     'pdf_link': rec.get('pdf_link'),
+                    'paper_summary': rec.get('paper_summary'),
+                    'published_year': rec.get('published_year'),
+                    'authors': rec.get('authors', []),
                     'calculated_score': rec.get('calculated_score')
                 })
                 self.logger.info(f"Recommended paper: {rec.get('paper_title')[:50]} (score: {rec.get('calculated_score', 0):.4f})")
@@ -207,7 +210,7 @@ class PaperGenerator:
                 'success': True
             }
         except Exception as e:
-            self.logger.error(f"Failed to get Jaccard recommendations: {str(e)}", exc_info=True)
+            self.logger.error(f"Failed to get CF recommendations: {str(e)}", exc_info=True)
             return {
                 'papers': [],
                 'success': False,
