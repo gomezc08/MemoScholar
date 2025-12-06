@@ -246,6 +246,98 @@ class DBInsert:
             if self.manage_connection:
                 self.connector.close_connection()
 
+    def upsert_youtube_video_embedding(self, youtube_id, embedding):
+        """Insert or update cached embedding for a YouTube video."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            if embedding is None:
+                return None
+            if isinstance(embedding, list):
+                embedding_str = json.dumps(embedding)
+            elif hasattr(embedding, '__iter__'):
+                embedding_str = json.dumps(list(embedding))
+            else:
+                embedding_str = str(embedding)
+
+            query = """
+                INSERT INTO youtube_video_embeddings (youtube_id, embedding)
+                VALUES (%s, STRING_TO_VECTOR(%s))
+                ON DUPLICATE KEY UPDATE embedding = STRING_TO_VECTOR(%s)
+            """
+            values = (youtube_id, embedding_str, embedding_str)
+            self.connector.cursor.execute(query, values)
+            self.connector.cnx.commit()
+            return self.connector.cursor.lastrowid
+        except Exception as e:
+            print("upsert_youtube_video_embedding error:", e)
+            self.connector.cnx.rollback()
+            return None
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+
+    def upsert_paper_embedding(self, paper_id, embedding):
+        """Insert or update cached embedding for a paper."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            if embedding is None:
+                return None
+            if isinstance(embedding, list):
+                embedding_str = json.dumps(embedding)
+            elif hasattr(embedding, '__iter__'):
+                embedding_str = json.dumps(list(embedding))
+            else:
+                embedding_str = str(embedding)
+
+            query = """
+                INSERT INTO paper_embeddings (paper_id, embedding)
+                VALUES (%s, STRING_TO_VECTOR(%s))
+                ON DUPLICATE KEY UPDATE embedding = STRING_TO_VECTOR(%s)
+            """
+            values = (paper_id, embedding_str, embedding_str)
+            self.connector.cursor.execute(query, values)
+            self.connector.cnx.commit()
+            return self.connector.cursor.lastrowid
+        except Exception as e:
+            print("upsert_paper_embedding error:", e)
+            self.connector.cnx.rollback()
+            return None
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+
+    def insert_paper_features(self, paper_id, features_list):
+        """Insert features for a paper."""
+        if self.manage_connection:
+            self.connector.open_connection()
+        try:
+            if not features_list:
+                return None
+
+            # Delete existing features
+            self.connector.cursor.execute(
+                "DELETE FROM paper_features WHERE paper_id = %s",
+                (paper_id,)
+            )
+
+            # Insert new features
+            values = [(paper_id, category, feature) for category, feature in features_list]
+            self.connector.cursor.executemany(
+                "INSERT INTO paper_features (paper_id, category, feature) VALUES (%s, %s, %s)",
+                values
+            )
+            self.connector.cnx.commit()
+            return self.connector.cursor.lastrowid
+        except Exception as e:
+            print("insert_paper_features error:", e)
+            self.connector.cnx.rollback()
+            return None
+        finally:
+            if self.manage_connection:
+                self.connector.close_connection()
+
     def create_like(self, project_id, target_type, target_id, isLiked):
         """
         target_type must be 'youtube' or 'paper' (per CHECK).

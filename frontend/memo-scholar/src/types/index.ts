@@ -68,6 +68,10 @@ export interface DatabasePaper {
   paper_summary: string;
   published_year: number | null;
   pdf_link: string | null;
+  // Score information from recommendations
+  score?: number;
+  calculated_score?: number;
+  rank_position?: number;
 }
 
 export interface DatabaseAuthor {

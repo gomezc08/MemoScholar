@@ -502,41 +502,25 @@ class TaskManager:
             error_msg = f"Query not found with ID: {query_id}"
             self.logger.error(error_msg)
             raise RuntimeError(error_msg)
-        
+
         self.logger.info(f"Retrieved query result: {query_result}")
-        paper_data = self.paper_generator.generate_paper(data, query_result)
+        # Ensure query_id is in data dict for paper_generator
+        data_with_query_id = {**data, 'query_id': query_id}
+        paper_data = self.paper_generator.generate_paper(data_with_query_id, query_result)
         self.logger.info(f"Generated paper data: {type(paper_data)}")
+
+        # Papers are already in database and formatted correctly from paper_generator
         papers = paper_data.get('papers', [])
-        papers_with_ids = []
-        
+        self.logger.info(f"Paper generator returned {len(papers)} papers")
+
+        # Papers already have all necessary fields (paper_id, paper_title, pdf_link, authors, etc.)
+        # Just return them as-is for the response
         for paper in papers:
-            # Extract authors from paper data
-            authors_list = paper.get('authors', [])
-            
-            # Create paper with authors
-            paper_id = self.db_insert.create_paper_with_authors(
-                project_id, 
-                query_id, 
-                paper.get('title', ''), 
-                paper.get('summary', ''), 
-                paper.get('year', 2024), 
-                paper.get('pdf_link', ''),
-                authors_list
-            )
-            
-            if paper_id:
-                # Add database ID to the paper data
-                paper_with_id = paper.copy()
-                paper_with_id['paper_id'] = paper_id
-                papers_with_ids.append(paper_with_id)
-                self.logger.info(f"Created paper with ID {paper_id}: {paper.get('title', 'Unknown')}")
-            else:
-                self.logger.warning(f"Failed to create paper: {paper.get('title', 'Unknown')}")
-        
-        
+            self.logger.info(f"Paper {paper.get('paper_id')}: {paper.get('paper_title', 'Unknown')[:50]}")
+
         self.logger.info(f"SUCCESSFULLY RAN API CALL - Created project ID: {project_id}")
-        self.logger.info(f"Returning {len(papers_with_ids)} papers with IDs")
-        return papers_with_ids  
+        self.logger.info(f"Returning {len(papers)} papers")
+        return papers  
     
     def _handle_youtube_task(self, data, project_id, query_id):
         """

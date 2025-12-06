@@ -24,6 +24,9 @@ export function transformPaperToItem(paper: DatabasePaperWithAuthors): Item {
       authors: authorsString || undefined,
       pdf_link: paper.pdf_link || undefined,
       summary: paper.paper_summary || undefined,
+      score: (paper as any).score,
+      calculated_score: (paper as any).calculated_score,
+      rank_position: (paper as any).rank_position,
     },
     feedback: undefined, // Will be set based on likes data
   };

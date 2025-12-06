@@ -207,9 +207,6 @@ class YoutubeGenerator:
         # get recs from jaccard coefficient
         jaccard_recs = self.jaccard_video_recommender.recommend(data['project_id'], topk=5, include_likes=True)
 
-        # update features
-        self.jaccard_video_recommender.update_features(data['project_id'])
-        
         # jaccard_recs now returns full video details with score
         formatted_recs = []
         for rec in jaccard_recs:
