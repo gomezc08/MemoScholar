@@ -504,29 +504,23 @@ class TaskManager:
             raise RuntimeError(error_msg)
 
         self.logger.info(f"Retrieved query result: {query_result}")
-        paper_data = self.paper_generator.generate_paper(data, query_result)
+        # Ensure query_id is in data dict for paper_generator
+        data_with_query_id = {**data, 'query_id': query_id}
+        paper_data = self.paper_generator.generate_paper(data_with_query_id, query_result)
         self.logger.info(f"Generated paper data: {type(paper_data)}")
 
-        # Papers are already in database from Jaccard add_candidates()
-        # Just need to return them with their IDs
+        # Papers are already in database and formatted correctly from paper_generator
         papers = paper_data.get('papers', [])
-        self.logger.info(f"Jaccard recommender returned {len(papers)} papers")
+        self.logger.info(f"Paper generator returned {len(papers)} papers")
 
-        # Papers already have paper_id from the recommend() call
-        # Format them for the response
-        papers_with_ids = []
+        # Papers already have all necessary fields (paper_id, paper_title, pdf_link, authors, etc.)
+        # Just return them as-is for the response
         for paper in papers:
-            papers_with_ids.append({
-                'paper_id': paper.get('paper_id'),
-                'title': paper.get('paper_title'),
-                'pdf_link': paper.get('pdf_link'),
-                'score': paper.get('calculated_score')
-            })
-            self.logger.info(f"Paper {paper.get('paper_id')}: {paper.get('paper_title', 'Unknown')[:50]} (score: {paper.get('calculated_score', 0):.4f})")
+            self.logger.info(f"Paper {paper.get('paper_id')}: {paper.get('paper_title', 'Unknown')[:50]}")
 
         self.logger.info(f"SUCCESSFULLY RAN API CALL - Created project ID: {project_id}")
-        self.logger.info(f"Returning {len(papers_with_ids)} papers with IDs")
-        return papers_with_ids  
+        self.logger.info(f"Returning {len(papers)} papers")
+        return papers  
     
     def _handle_youtube_task(self, data, project_id, query_id):
         """

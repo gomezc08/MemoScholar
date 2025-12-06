@@ -2,9 +2,11 @@ import urllib.parse
 import urllib.request
 import json
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from ..openai import openai_client
 from ..utils.logging_config import get_logger
 from ..db.db_crud.select_db import DBSelect
+from ..db.db_crud.insert import DBInsert
 from ..db.connector import Connector
 from ..cf_recommender.cf_paper_recommender import CFPaperRecommender
 from .create_query import CreateQuery
@@ -16,6 +18,7 @@ class PaperGenerator:
         self.temperature = 0.0
         self.logger = get_logger(__name__)
         self.db_select = DBSelect()
+        self.db_insert = DBInsert()
         self.create_query = CreateQuery()
         self.connector = Connector()
         self.cf_paper_recommender = CFPaperRecommender(self.connector)
@@ -50,9 +53,24 @@ class PaperGenerator:
                 summary_elem = entry.find('.//{http://www.w3.org/2005/Atom}summary')
                 paper['summary'] = summary_elem.text.strip() if summary_elem is not None else 'No summary'
                 
-                # Extract published date
+                # Extract published date and year
                 published_elem = entry.find('.//{http://www.w3.org/2005/Atom}published')
-                paper['published'] = published_elem.text.strip() if published_elem is not None else 'No date'
+                if published_elem is not None and published_elem.text:
+                    published_str = published_elem.text.strip()
+                    paper['published'] = published_str
+                    # Extract year from ISO format date (e.g., "2023-01-15T12:00:00Z")
+                    try:
+                        published_date = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                        paper['published_year'] = published_date.year
+                    except (ValueError, AttributeError):
+                        # Try to extract year from string if parsing fails
+                        try:
+                            paper['published_year'] = int(published_str[:4])
+                        except (ValueError, IndexError):
+                            paper['published_year'] = None
+                else:
+                    paper['published'] = 'No date'
+                    paper['published_year'] = None
                 
                 # Extract authors
                 authors = []
@@ -145,7 +163,8 @@ class PaperGenerator:
         # 2. Retrieve papers
         try:
             self.logger.info(f"Fetching papers from ArXiv with query: {query}")
-            raw_xml = self.search_paper(query, max_results=15)
+            # Fetch 15-20 candidates for CF recommendation
+            raw_xml = self.search_paper(query, max_results=20)
             if not raw_xml:
                 self.logger.error("ArXiv API returned no data")
                 raise ValueError("Failed to fetch papers from ArXiv")
@@ -162,57 +181,204 @@ class PaperGenerator:
             self.logger.error(f"ArXiv API failed: {str(e)}", exc_info=True)
             raise
 
-        # 3. Format candidates for CF recommender
-        self.logger.info("Formatting papers for CF recommender")
-        formatted_candidates = []
-        for paper in raw_papers:
-            formatted_candidates.append({
-                'title': paper['title'],
-                'summary': paper['summary'],
-                'year': paper.get('year'),
-                'authors': paper.get('authors', []),
-                'pdf_link': paper.get('pdf_link')
-            })
-        self.logger.info(f"Formatted {len(formatted_candidates)} paper candidates")
+        # 3. Add papers to database and collect paper IDs
+        project_id = data['project_id']
+        query_id = data.get('query_id') or q.get('query_id')
+        
+        if not query_id:
+            self.logger.warning(f"query_id not found in data or query result, using None")
+        
+        self.logger.info(f"Adding {len(raw_papers)} papers to database for project {project_id}, query_id {query_id}")
+        added_paper_ids = []
+        # Map paper_id to original paper data for link and published date
+        paper_id_to_raw_data = {}
+        
+        for idx, paper in enumerate(raw_papers):
+            try:
+                # Extract paper information
+                paper_title = paper.get('title', 'No title')
+                paper_summary = paper.get('summary', '')
+                published_year = paper.get('published_year')
+                pdf_link = paper.get('pdf_link', '')
+                arxiv_link = paper.get('link', '')  # ArXiv abstract page link
+                published_date = paper.get('published', '')  # Full published date
+                authors_list = paper.get('authors', [])
+                
+                # If we don't have arxiv_link but have pdf_link, generate it
+                if not arxiv_link or arxiv_link == 'No link':
+                    if pdf_link and pdf_link != 'No PDF':
+                        # Convert PDF link to abstract link
+                        if '/pdf/' in pdf_link:
+                            arxiv_link = pdf_link.replace('/pdf/', '/abs/').replace('.pdf', '')
+                        else:
+                            arxiv_link = pdf_link
+                
+                # Skip if paper already exists (check by title)
+                # We'll add all papers for now, but you could add duplicate checking here
+                
+                # Create paper with authors in database
+                # Note: We store pdf_link in DB, and generate abstract link from it when needed
+                paper_id = self.db_insert.create_paper_with_authors(
+                    project_id=project_id,
+                    query_id=query_id,
+                    paper_title=paper_title,
+                    paper_summary=paper_summary,
+                    published_year=published_year,
+                    pdf_link=pdf_link,
+                    authors_list=authors_list
+                )
+                
+                if paper_id:
+                    added_paper_ids.append(paper_id)
+                    # Store original paper data for link and published date
+                    paper_id_to_raw_data[paper_id] = {
+                        'link': arxiv_link,
+                        'published': published_date
+                    }
+                    self.logger.info(f"Added paper {idx+1}/{len(raw_papers)}: {paper_title[:50]} (ID: {paper_id})")
+                else:
+                    self.logger.warning(f"Failed to add paper {idx+1}/{len(raw_papers)}: {paper_title[:50]}")
+                    
+            except Exception as e:
+                self.logger.error(f"Error adding paper {idx+1}/{len(raw_papers)}: {str(e)}", exc_info=True)
+                continue
+        
+        self.logger.info(f"Successfully added {len(added_paper_ids)} papers to database")
 
-        # 4. Add candidates to database
+        # 4. Use CF recommender to score papers and get top 5
         try:
-            self.logger.info(f"Adding {len(formatted_candidates)} papers to database for project {data['project_id']}")
-            added_ids = self.cf_paper_recommender.add_candidates(data['project_id'], formatted_candidates)
-            self.logger.info(f"Successfully added {len(added_ids)} papers to database with IDs: {added_ids}")
-        except Exception as e:
-            self.logger.error(f"Failed to add papers to database: {str(e)}", exc_info=True)
-            raise
-
-        # 5. Get recommendations from CF model
-        try:
-            self.logger.info(f"Getting CF recommendations for project {data['project_id']}")
-            cf_recs = self.cf_paper_recommender.recommend(data['project_id'], topk=5)
+            self.logger.info(f"Getting CF recommendations for project {project_id}")
+            cf_recs = self.cf_paper_recommender.recommend(project_id, topk=5)
             self.logger.info(f"CF recommender returned {len(cf_recs)} recommendations")
-
-            # Format recommendations
-            formatted_recs = []
-            for rec in cf_recs:
-                formatted_recs.append({
-                    'paper_id': rec.get('paper_id'),
-                    'paper_title': rec.get('paper_title'),
-                    'pdf_link': rec.get('pdf_link'),
-                    'paper_summary': rec.get('paper_summary'),
-                    'published_year': rec.get('published_year'),
-                    'authors': rec.get('authors', []),
-                    'calculated_score': rec.get('calculated_score')
-                })
-                self.logger.info(f"Recommended paper: {rec.get('paper_title')[:50]} (score: {rec.get('calculated_score', 0):.4f})")
-
-            self.logger.info(f"Returning {len(formatted_recs)} formatted paper recommendations")
-            return {
-                'papers': formatted_recs,
-                'success': True
-            }
+            
+            if not cf_recs or len(cf_recs) == 0:
+                self.logger.warning("CF recommender returned no recommendations, falling back to all papers")
+                # Fallback: return all papers without scores
+                formatted_papers = []
+                for paper_id in added_paper_ids[:5]:  # Limit to 5 even in fallback
+                    try:
+                        paper_data = self.db_select.get_paper_with_authors(paper_id)
+                        if paper_data:
+                            authors_list = paper_data.get('authors', [])
+                            authors_names = []
+                            if isinstance(authors_list, list):
+                                for author in authors_list:
+                                    if isinstance(author, dict):
+                                        authors_names.append(author.get('name', ''))
+                                    elif isinstance(author, str):
+                                        authors_names.append(author)
+                            
+                            # Generate ArXiv link from PDF link
+                            pdf_link = paper_data.get('pdf_link', '')
+                            arxiv_link = ''
+                            if pdf_link:
+                                # Convert PDF link to abstract link
+                                if '/pdf/' in pdf_link:
+                                    arxiv_link = pdf_link.replace('/pdf/', '/abs/').replace('.pdf', '')
+                                else:
+                                    arxiv_link = pdf_link
+                            
+                            formatted_papers.append({
+                                'paper_id': paper_data['paper_id'],
+                                'title': paper_data['paper_title'],
+                                'paper_title': paper_data['paper_title'],
+                                'link': arxiv_link,
+                                'pdf_link': pdf_link,
+                                'summary': paper_data.get('paper_summary', ''),
+                                'paper_summary': paper_data.get('paper_summary', ''),
+                                'published_year': paper_data.get('published_year'),
+                                'published': f"{paper_data.get('published_year')}-01-01T00:00:00Z" if paper_data.get('published_year') else None,
+                                'authors': authors_names,
+                                'calculated_score': 0.0
+                            })
+                    except Exception as e:
+                        self.logger.error(f"Error retrieving paper {paper_id}: {str(e)}", exc_info=True)
+                        continue
+            else:
+                # Format CF recommendations for response
+                formatted_papers = []
+                for rec in cf_recs:
+                    paper_id = rec.get('paper_id')
+                    pdf_link = rec.get('pdf_link', '')
+                    
+                    # Get original link and published date if available
+                    raw_data = paper_id_to_raw_data.get(paper_id, {})
+                    arxiv_link = raw_data.get('link', '')
+                    published_date = raw_data.get('published', '')
+                    
+                    # Generate ArXiv link from PDF link if we don't have it
+                    if not arxiv_link or arxiv_link == 'No link':
+                        if pdf_link and pdf_link != 'No PDF':
+                            if '/pdf/' in pdf_link:
+                                arxiv_link = pdf_link.replace('/pdf/', '/abs/').replace('.pdf', '')
+                            else:
+                                arxiv_link = pdf_link
+                    
+                    # Use published date from raw data, or generate from year
+                    if published_date and published_date != 'No date':
+                        published = published_date
+                    else:
+                        published = f"{rec.get('published_year')}-01-01T00:00:00Z" if rec.get('published_year') else None
+                    
+                    formatted_papers.append({
+                        'paper_id': paper_id,
+                        'title': rec.get('paper_title', ''),  # Frontend expects 'title'
+                        'paper_title': rec.get('paper_title', ''),
+                        'link': arxiv_link,  # ArXiv abstract page for clickable title
+                        'pdf_link': pdf_link,
+                        'summary': rec.get('paper_summary', ''),  # Frontend expects 'summary'
+                        'paper_summary': rec.get('paper_summary', ''),
+                        'published_year': rec.get('published_year'),
+                        'published': published,
+                        'authors': rec.get('authors', []),
+                        'calculated_score': rec.get('calculated_score', 0.0)
+                    })
+                    self.logger.info(f"Recommended paper: {rec.get('paper_title', 'Unknown')[:50]} (score: {rec.get('calculated_score', 0):.4f})")
+        
         except Exception as e:
             self.logger.error(f"Failed to get CF recommendations: {str(e)}", exc_info=True)
-            return {
-                'papers': [],
-                'success': False,
-                'error': str(e)
-            }   
+            # Fallback: return first 5 papers without scoring
+            formatted_papers = []
+            for paper_id in added_paper_ids[:5]:
+                try:
+                    paper_data = self.db_select.get_paper_with_authors(paper_id)
+                    if paper_data:
+                        authors_list = paper_data.get('authors', [])
+                        authors_names = []
+                        if isinstance(authors_list, list):
+                            for author in authors_list:
+                                if isinstance(author, dict):
+                                    authors_names.append(author.get('name', ''))
+                                elif isinstance(author, str):
+                                    authors_names.append(author)
+                        
+                        pdf_link = paper_data.get('pdf_link', '')
+                        arxiv_link = ''
+                        if pdf_link:
+                            if '/pdf/' in pdf_link:
+                                arxiv_link = pdf_link.replace('/pdf/', '/abs/').replace('.pdf', '')
+                            else:
+                                arxiv_link = pdf_link
+                        
+                        formatted_papers.append({
+                            'paper_id': paper_data['paper_id'],
+                            'title': paper_data['paper_title'],
+                            'paper_title': paper_data['paper_title'],
+                            'link': arxiv_link,
+                            'pdf_link': pdf_link,
+                            'summary': paper_data.get('paper_summary', ''),
+                            'paper_summary': paper_data.get('paper_summary', ''),
+                            'published_year': paper_data.get('published_year'),
+                            'published': f"{paper_data.get('published_year')}-01-01T00:00:00Z" if paper_data.get('published_year') else None,
+                            'authors': authors_names,
+                            'calculated_score': 0.0
+                        })
+                except Exception as e2:
+                    self.logger.error(f"Error retrieving paper {paper_id}: {str(e2)}", exc_info=True)
+                    continue
+        
+        self.logger.info(f"Returning {len(formatted_papers)} formatted paper recommendations")
+        return {
+            'papers': formatted_papers,
+            'success': True
+        }   
